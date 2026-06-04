@@ -16,10 +16,6 @@ Cost-aware regression baseline incorporating weighted penalties for alarm and wa
 # •	alarmF1Loss.m
 Custom evaluation function implementing alarm-oriented F1-score for imbalanced classification and failure detection assessment.
 # 1.2 Data Files
-# •	engine_data1.mat – FD001 training dataset
-# •	engine_testdata1_Unhead.mat – FD001 test dataset (truncated trajectories)
-# •	engine_RULdata1.mat – Ground-truth RUL values for FD001 test engines
-# •	engine_data2.mat – FD002 training dataset
 # •	selectedFeatures1.mat – mRMR-based feature ranking (FD001, top-20 predictors)
 # •	selectedFeatures2.mat – mRMR-based feature ranking (FD002, top-20 predictors)
 # 2. System Requirements
@@ -41,7 +37,7 @@ The final output is both cycle-level and engine-level maintenance-oriented healt
 # 4. Execution Workflow
 To reproduce the results reported in the manuscript, the following pipeline should be executed:
 4.1 FD001 – Model Development and Selection
-1.	Load FD001 dataset from .mat files
+1.	Load FD001 dataset
 2.	Execute preprocessing and feature engineering pipeline
 3.	Stage I – Model screening:
 Run multiple supervised classifiers under cost-sensitive learning using MATLAB Classification Learner App
@@ -77,7 +73,7 @@ The implementation generates the following outputs:
 This study uses the NASA C-MAPSS turbofan engine degradation dataset:
 # •	FD001: Single operating condition, single fault mode
 # •	FD002: Multiple (6) operating conditions, multiple flight regimes
-The dataset is publicly available and is partially redistributed in this repository.
+The dataset is publicly available and is not redistributed in this repository.
 # 7. Reproducibility Notes
 # •	All experiments are fully reproducible using the provided MATLAB scripts
 # •	Feature selection rankings are precomputed and stored in .mat files
