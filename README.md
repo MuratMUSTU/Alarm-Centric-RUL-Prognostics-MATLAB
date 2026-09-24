@@ -1,6 +1,13 @@
-# Alarm-Centric Prognostic Framework for Aircraft Turbofan Engines (MATLAB Implementation)
-This repository contains the MATLAB implementation of the alarm-centric, decision-oriented prognostic framework for aircraft turbofan engines. The proposed methodology reformulates remaining useful life (RUL) estimation as a three-state degradation classification problem (normal, warning, alarm) aligned with maintenance decision thresholds.
-The framework is developed and validated on the publicly available NASA C-MAPSS FD001 and FD002 datasets, and integrates feature engineering with ranking, cost-sensitive classification, group-aware cross validation, Bayesian hyperparameter optimization, hierarchical threshold calibration, engine-level decision aggregation, and maintenance-oriented evaluation strategies for predictive maintenance (PdM) applications.
+# Decision-Oriented Prognostics of Aircraft Turbofan Engines (MATLAB Implementation)
+This repository provides the MATLAB implementation accompanying the study:
+“Decision-Oriented Prognostics of Aircraft Turbofan Engines: From Failure-Proximity Learning to Engine-Level Alarm Decisions”
+The repository implements an experimentally decomposed decision-oriented prognostic architecture for aircraft turbofan engines. Rather than treating prognostics exclusively as continuous remaining useful life (RUL) estimation, the framework formulates engine health in three failure-proximity states—normal, warning, and alarm—and explicitly separates:
+1.	Failure-proximity learning
+2.	Probability-based decision calibration
+3.	Cycle-to-engine decision integration
+The implementation combines cost-sensitive multi-state classification, engine-grouped model development, Bayesian hyperparameter optimization, probability-threshold calibration, and Trajectory-Aware Evidence Integration (TAEI) as a trajectory-aware hierarchical mechanism for integrating sequential alarm evidence into engine-level decisions.
+Experiments are conducted on the publicly available NASA Commercial Modular Aero-Propulsion System Simulation (C-MAPSS) FD001 and FD002 datasets. FD001 is used for the principal model-development and evaluation workflow, while FD002 is used to examine cross-condition robustness under alternative predictor-set strategies.
+
 # 1. Repository Structure
 # 1.1 MATLAB Implementation Files
 # •	MUSTU1_FD001_Class3.m
