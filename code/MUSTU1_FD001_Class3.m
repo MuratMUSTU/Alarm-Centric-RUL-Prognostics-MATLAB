@@ -1,4 +1,4 @@
-%% DATA LOADING (Load Raw Data to MATLAB's Workspace)
+%% 1.DATA LOADING (Load Raw Data to MATLAB's Workspace)
 %The 100 different engine is operating normally at the beginning,
 %and develops a fault (HPC degredation) during at some point the series.
 %In training set, the fault grows in magnitude until failure. In test set,
@@ -14,7 +14,7 @@ TrainData1=engine_data1;
 %To add variablenames to test data;
 engine_testdata1_Unhead.Properties.VariableNames = ["Engine_ID","Time","Op_Set1","Op_Set2","Op_Set3","T2","T24","T30","T50","P2","P15","P30","Nf","Nc","epr","Ps30","phi","NRf","NRc","BPR","farB","htBleed","Nf_dmd","PcNfR_dmd","W31","W32"];
 TestData1=engine_testdata1_Unhead;
-%% DATA ANALYSIS
+%% 2.DATA ANALYSIS
 head(TrainData1,3) %To see the first 3 rows of training data
 summary(TrainData1);
 Checkpoint1=grpstats(TrainData1, "Engine_ID", "numel");
@@ -34,8 +34,10 @@ xlabel('Engine No')
 ylabel('Number of Flights (Cycles)')
 title('Number of Flights of Engines to Failure')
 Cycle_min=min(Checkpoint2.GroupCount);
+Cycle_mean=mean(Checkpoint2.GroupCount);
 Cycle_max=max(Checkpoint2.GroupCount);
 disp(['Lowest Cycle: ', num2str(Cycle_min)]);
+disp(['Mean Cycle: ', num2str(Cycle_mean)]);
 disp(['Highest Cycle: ', num2str(Cycle_max)]);
 % The lowest cycle is 128 of Engine Nu.39, and the highest cycle is 362 of Engine Nu.69
 
@@ -64,7 +66,7 @@ end
 % We can select the useable 14 variables (feature selection) and remove the 
 % 7 sensor data that were flat and unuseful.
 
-%% RUL CLASS DEFINITION AND GENERATION
+%% 3.RUL CLASS DEFINITION AND GENERATION
 %Revise training table data including TTF(RUL) variables.
 IDs = TrainData1{:,1};
 n = length(unique(IDs));
@@ -83,7 +85,8 @@ TrainData1.TTF=TTF';
 Thresh_alarm=round(10*Cycle_min/100);
 
 %Alarm Threshold Sensivity Analysis
-%Thresh_alarm=15;
+%Thresh_alarm=25;
+%Thresh_warning=75;
 
 Thresh_warning=round(30*Cycle_min/100);
 catThreshold=[Thresh_alarm,Thresh_warning,Cycle_max];
@@ -109,7 +112,7 @@ TestData1.TTF=RTF';
 TTF_testc = discretize(RTF',[0 Thresh_alarm Thresh_warning Cycle_max],"categorical",["alarm" "warning" "normal"]);
 TestData1.RUL=TTF_testc;
 
-%% ENGINE LEVEL DATA PARTITIONING (%80 for training and %20 for validation)
+%% 4.ENGINE LEVEL DATA PARTITIONING (%80 for training and %20 for validation)
 %To convert table data to cell array data
 IDs = TrainData1{:,1};
 nID = unique(IDs);
@@ -131,7 +134,7 @@ ValidationData1= vertcat(ValidationData{:}) %raw table data of 20 engines
 % Now, raw training, validation, and test datasets are ready to save.
 %save TrainData1
 
-%% Visualize All Sensor Data in Categories
+%% Visualize All Sensor Data in Categories (Optional Step)
 figure
 for ii=1:9
 h(ii)=subplot(3,3,ii);
@@ -149,7 +152,8 @@ for ii=1:12
 end
 %The signals of the 7 sensors should be removed because of having no
 %degradation trend.
-%% DATA PREPROCESSING (REMOVE UNUSABLE DATA)
+%save TrainData1
+%% 5.DATA PREPROCESSING (REMOVE UNUSABLE DATA)
 %load TrainData1
 %Select the useful variables of training and test data. (Feature Selection)
 TrainData1_raw=TrainData1(:,[1 2 3 4 5 7 8 9 12 13 14 16 17 18 19 20 22 25 26 27 28]);
@@ -157,7 +161,7 @@ ValidationData1_raw=ValidationData1(:,[1 2 3 4 5 7 8 9 12 13 14 16 17 18 19 20 2
 TestData1_raw=TestData1(:,[1 2 3 4 5 7 8 9 12 13 14 16 17 18 19 20 22 25 26 27 28]);
 %save TrainData1_raw
 
-%% DATA PREPROCESSING-SMOOTHING (REMOVE NOISE)
+%% 6. DATA PREPROCESSING-SMOOTHING (REMOVE NOISE)
 %load TrainData1_raw
 % Step1-Define operating regime segments (cluster) before regime-aware smoothing
 % Operating condition variables
@@ -295,7 +299,7 @@ for i=1:15
     xlabel('Time')
 end
 
-%% FEATURE ENGINEERING (ENGINE-LEVEL ONLY)
+%% 7.FEATURE ENGINEERING (ENGINE-LEVEL ONLY)
 %load TrainData1s
 % For training data, add features by making feature engineering
 % Long-term features are intentionally excluded to improve robustness
@@ -513,8 +517,8 @@ TestData1sf = TestData1s(rowsToKeep,:);
 
 %save TrainData1sf
 ID1=TrainData1sf(TrainData1sf.Engine_ID==1,:)
-%% TRAINING DATA NORMALIZATION
-%load TrainData1sf
+%% 8.TRAINING DATA NORMALIZATION
+%load TrainData1sf (Smoothed and feature-engineered FD001 training data)
 % STEP 2 — Cluster-based normalization (TRAIN)
 sensorVars = {'T24','T30','T50','P30','Nf','Nc','Ps30','phi','NRf','NRc','BPR','htBleed','W31','W32',...
     'dT24','dT30','dT50','dP30','dNf','dNc','dPs30','dphi','dNRf','dNRc','dBPR','dhtBleed','dW31','dW32',...
@@ -559,7 +563,7 @@ end
 TrainData1sf{:, sensorVars} = Xnorm;
 TrainData1sfn=TrainData1sf
 
-%% VALIDATION AND TEST DATA NORMALIZATION
+%% 9.VALIDATION AND TEST DATA NORMALIZATION
 % Validation normalization
 Xnorm_val = zeros(size(ValidationData1sf{:, sensorVars}));
 
@@ -624,7 +628,7 @@ for i=1:12
     title(ID1.Properties.VariableNames{52+i})
     xlabel('Time')
 end
-%% CREATING HEALTH INDEX AS A NEW FEATURE
+%% 10.CREATING HEALTH INDEX AS A NEW FEATURE
 %load TrainData1sfn
 rng(1,"twister"); %Fix the global random seed for reproducibility
 basic_vars = {'T24','T30','T50','P30','Nf','Nc','Ps30','phi','NRf','NRc','BPR','htBleed','W31','W32'}; %Basic 14 sensors
@@ -682,7 +686,8 @@ HI_test_norm = (HI_test - mu_HI) / std_HI;
 TestData1sfn.HealthIndex = HI_test_norm;
 % We have totally 57 features consist of 14 sensor data and 43 generated data
 %save TestData1sfn
-%% FEATURE RANKING and SELECTION OF TOP 20 PREDICTORS
+%load Thresh_alarm
+%% 11.FEATURE RANKING and SELECTION OF TOP 20 PREDICTORS
 %load TestData1sfn
 rng(1,"twister"); %Fix the global random seed fr reproducibility
 
@@ -714,30 +719,81 @@ T = table(topFeatures', topScores', ...
     'VariableNames', {'Feature','mRMR_Score'});
 
 disp(T)
-save selectedFeatures1.mat topFeatures
+%save selectedFeatures1.mat topFeatures
 
-%% Select Top 20 common predictors from FD001 and FD002.
-%load TestData1sfn
-%load selectedFeatures1
-%load selectedFeatures2
-rng(1,"twister"); %Fix the global random seed fr reproducibility
-% Here, the 20 common predictors of FD001 and FD002 datasetare selected.
-%Prepare the datasets for next 2ndstage pipeline according to the selected predictors
-%Mixed20= HI+12 sensor+3 mid-term +4 short-term (Replace 'BPR_trend10' with 'P30_trend10')
-columns_top_pred= {'Engine_ID','Time','HealthIndex','dW32','NRf_trend5','T24_trend5','NRc_trend5','Nc','Nf','T24','T30','T50','W32','htBleed','P30','Ps30','phi','BPR','W31','NRc_trend10', 'P30_trend10','NRf_trend10','TTF','RUL'};
+%% 12.Select Top 20  predictors from only FD001
+topFeatures=T.Feature;
+rng(1,"twister"); %Fix the global random seed for reproducibility
+columns_top_pred= {'Engine_ID','Time',topFeatures{:,:},'TTF','RUL'};
+
+%Fixed Top 20 predictors from FD001 training data using baseline alarm threshold
+%columns_top_pred= {'Engine_ID','Time','HealthIndex','Nc','dT50','T24_trend5','dW32','dBPR','P30_trend10','dT30','phi_trend5','Ps30_trend10','W31_trend10','BPR_trend10','T50_trend10','W32_trend10','NRf_trend10','NRc_trend10','T24','Nf_trend10','T30','phi_trend10','TTF','RUL'};
 
 TrainData1sfnr=TrainData1sfn(:, columns_top_pred);
 TestData1sfnr=TestData1sfn(:, columns_top_pred);
 ValidationData1sfnr=ValidationData1sfn(:, columns_top_pred);
-%save TrainData1sfnr
+save TrainData1sfnr
 
-%% Using classificationLearner for generating function of model
+%% Common Top-20 Feature Selection from FD001 and FD002 mRMR Rankings
+%(IF ONLY COMMON FEATURE STRATEGY FOR CROSS-CONDITION ROBUSTNESS THEN APPLY THIS)
+
+% T1: FD001 mRMR ranking
+% T2: FD002 mRMR ranking
+% Both tables contain:
+%   Feature       mRMR_Score
+%   57 rows
+load T2
+% 1. Make sure Feature is a string variable
+T1.Feature = string(T1.Feature);
+T2.Feature = string(T2.Feature);
+
+% 2. Align T2 with T1 according to Feature names
+[isMember, idxT2] = ismember(T1.Feature, T2.Feature);
+
+% Check that every FD001 feature exists in FD002
+if ~all(isMember)
+    error('Some features in T1 are missing from T2.');
+end
+
+% Reorder T2 so that the feature order is identical to T1
+T2_aligned = T2(idxT2,:);
+
+% 3. Calculate the mean mRMR score
+CommonRanking = table;
+
+CommonRanking.Feature = T1.Feature;
+CommonRanking.FD001_Score = T1.mRMR_Score;
+CommonRanking.FD002_Score = T2_aligned.mRMR_Score;
+
+CommonRanking.Mean_mRMR_Score = ...
+    (CommonRanking.FD001_Score + CommonRanking.FD002_Score) / 2;
+
+% 4. Sort according to the mean mRMR score
+CommonRanking = sortrows(CommonRanking, ...
+    'Mean_mRMR_Score', 'descend');
+
+% 5. Select the common top 20 features
+CommonTop20 = CommonRanking(1:20,:);
+
+% 6. Display the results
+disp('Common Top-20 Features:')
+disp(CommonTop20)
+
+%Apply 20 common predictors to the FD001 development/training data
+topFeatures=CommonTop20.Feature;
+rng(1,"twister"); %Fix the global random seed for reproducibility
+columns_top_pred= {'Engine_ID','Time',topFeatures{:,:},'TTF','RUL'};
+TrainData1sfnr=TrainData1sfn(:, columns_top_pred);
+TestData1sfnr=TestData1sfn(:, columns_top_pred);
+ValidationData1sfnr=ValidationData1sfn(:, columns_top_pred);
+
+%% 13.Using classificationLearner for generating function of model
 load TrainData1sfnr
 rng(1,"twister"); %Fix the global random seed
-classificationLearner
+classificationLearner;
 %33 ML models available in the classificationLearner app. are trained with
 % cost sensitive learning by using TrainData1sfnr
-%% Use Generated Function from App for External Training of models
+%% 14.Use Generated Function from App for External Training of models
 % Add rng(1,"twister") inside the generated function to fix the global
 % random seed, then save it as trainClassifier.m, and run this code for
 % external training.
@@ -747,7 +803,7 @@ rng(1,"twister"); %Fix the global random seed
 % After externally training data with a specific model's generated function,
 % apply external validation process below.
 
-%% EXTERNAL VALIDATION PROCESS of models
+%% 15.EXTERNAL VALIDATION PROCESS of models
 rng(1,"twister"); %Fix the global random seed
 [yfit_all,scores] = trainedClassifier.predictFcn(ValidationData1sfnr);
 Xp_all=tabulate(yfit_all)
@@ -756,19 +812,28 @@ Xr_all=tabulate(ValidationData1sfnr.RUL);
 %Number of true classes (e.g. 260 alarms) in 3752 validation data
 C_nn1=confusionmat(ValidationData1sfnr.RUL,yfit_all);
 confusionchart(ValidationData1sfnr.RUL,yfit_all);
-% According to the opening confuion matrix, Alarm recall, precision and 
+
+% According to the opening confusion matrix, Alarm recall, precision and 
 % F1-score are calculated.
 
-%Evaluate Validation Results
-mukayese=table(ValidationData1sfnr.Engine_ID,ValidationData1sfnr.Time,ValidationData1sfnr.RUL,yfit_all,ValidationData1sfnr.TTF);
-mukayese.Properties.VariableNames=[{'Engine_ID'} {'Time'} {'True_Class'} {'Predicted_Class'} {'True_RUL'}];
-mukayese1=mukayese(mukayese.True_Class=='alarm',:);
+[recall_val, precision_val, F1_val] = alarmMetrics1(ValidationData1sfnr.RUL,yfit_all)
 
-% Finally, top 5 candidate models are selected according to the validation
-% F1-score, at the end of this pipeline1. Candidate models are as follows:
-% 2.22. Ensemble Bossted Trees with cost 9-10-8-9
-% 25. Coarse KNN with cost 4-5-3-4
-% 24. Ensemble Bagged Trees with cost 4-5-3-4
-% 18. Narrow NN with cost 4-5-3-4
-% 19. Medium NN with cost 4-5-3-4
+
+
+function [recall, precision, F1] = alarmMetrics1(Ytrue, Ypred)
+
+    classOrder = ["alarm","warning","normal"];
+    Ytrue = categorical(lower(string(Ytrue)), classOrder);
+    Ypred = categorical(lower(string(Ypred)), classOrder);
+
+    alarmClass = "alarm";
+  
+    tp = sum((Ytrue == alarmClass) & (Ypred == alarmClass));
+    fn = sum((Ytrue == alarmClass) & (Ypred ~= alarmClass));
+    fp = sum((Ytrue ~= alarmClass) & (Ypred == alarmClass));
+
+    recall = tp / (tp + fn + eps);
+    precision = tp / (tp + fp + eps);
+    F1 = 2 * (precision * recall) / (precision + recall + eps);
+end
 
