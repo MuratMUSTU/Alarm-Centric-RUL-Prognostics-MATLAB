@@ -129,54 +129,146 @@ TAEI is implemented as a trajectory-aware hierarchical decision mechanism that i
 TAEI is a post-classifier decision layer. It does not modify the underlying cycle-level predictions or classifier parameters.
 Its decision-policy configuration is fixed before independent-test evaluation and is not optimized using the independent test set.
 
-# 4. Execution Workflow
-To reproduce the results reported in the manuscript, the following pipeline should be executed:
-4.1 FD001 – Model Development and Selection
-1.	Load FD001 dataset
-2.	Execute preprocessing and feature engineering pipeline
-3.	Stage I – Model screening:
-Run multiple supervised classifiers under cost-sensitive learning using MATLAB Classification Learner App
-4.	Select top-performing model families based on validation alarm-class F1-score
-5.	Stage II – Model optimization:
-Apply Bayesian hyperparameter optimization, nested engine-level cross-validation, and cost-sensitive learning
-6.	Apply hierarchical threshold calibration (alarm and warning thresholds)
-7.	Perform engine-level decision aggregation and compute final cycle-level and engine-level performance metrics
-Example (FD001 full pipeline):
-run MUSTU1_FD001_Class3.m (Stage I – model screening)
-run MUSTU2_FD001_Class3.m (Stage II – optimization & final model)
-4.2 Baseline Comparisons (FD001)
-run MUSTU3_FD001_Regression_Comparison.m
-run MUSTU4_FD001_CostAware_Regression_Comparison.m
-4.3 FD002 – Cross-Condition Deployment Evaluation
-1.	Load FD002 dataset 
-2.	Apply identical preprocessing pipeline and feature set selected from FD001 
-3.	Retrain the Narrow NN model using the same architecture, cost matrix, and hyperparameter configuration optimized on FD001 
-4.	Apply the same calibrated decision thresholds derived from FD001 without re-tuning 
-5.	Perform cycle-level prediction and engine-level aggregation 
-6.	Evaluate performance under multiple operating conditions and regime variations
-Example (FD002 full pipeline):
-run MUSTU5_FD002_Class3.m
-# 5. Outputs
-The implementation generates the following outputs:
-# •	Cycle-level health-state predictions (normal / warning / alarm)
-# •	Engine-level alarm detection results
-# •	Alarm-oriented precision, recall, and F1-score
-# •	Maintenance prioritization rankings based on alarm proximity
-# •	Cost-sensitive evaluation metrics
-# •	Comparative results for regression and classification baselines
-# 6. Dataset Information
-This study uses the NASA C-MAPSS turbofan engine degradation dataset:
-# •	FD001: Single operating condition, single fault mode
-# •	FD002: Multiple (6) operating conditions, multiple flight regimes
-The dataset is publicly available and is not redistributed in this repository.
-# 7. Reproducibility Notes
-# •	All experiments are fully reproducible using the provided MATLAB scripts
-# •	Feature selection rankings are precomputed and stored in .mat files
-# •	Random seeds are fixed where applicable to ensure deterministic results
-# •	Engine-level partitioning is used to prevent data leakage across trajectories
-# 8. License
+# 4. Execution Workflow (FD001 Model Development and Evaluation)
+Step 1 — Load the FD001 Dataset
+Load the publicly available C-MAPSS FD001 training and test data.
+Step 2 — Define Failure-Proximity States
+Generate the normal, warning, and alarm labels according to the predefined RUL decision boundaries.
+Step 3 — Engine-Level Data Partitioning
+Partition the FD001 training engines at the engine level into development and held-out validation subsets.
+This prevents observations from the same engine trajectory from appearing in both subsets.
+Step 4 — Preprocessing and Feature Engineering
+Execute the preprocessing pipeline, including:
+•	Operating-regime processing
+•	Causal smoothing
+•	Sensor-derived feature engineering
+•	Trend and cumulative features
+•	Normalization
+•	PCA-based health-index construction
+•	Candidate predictor generation
+The resulting candidate feature space contains 57 predictors, from which 20 predictors are selected using mRMR.
+Step 5 — Stage I Model Screening
+Run:
+MUSTU1_FD001_Class3.m
+The script supports the Stage I model-screening workflow. The 33 classification models are evaluated under cost-sensitive learning using MATLAB Classification Learner.
+Following training, the selected model functions can be exported for external retraining and validation.
+Step 6 — Candidate Model Selection
+Select candidate model families using the held-out validation alarm-class F1-score.
+Step 7 — Stage II Model Optimization
+Run:
+MUSTU2_FD001_Class3.m
+The selected models are refined using engine-grouped cross-validation and Bayesian hyperparameter optimization.
+Step 8 — Probability-Threshold Calibration
+Calibrate the alarm and warning probability thresholds using the held-out validation engines.
+Step 9 — Cycle-to-Engine Decision Integration
+Apply the common worst-case aggregation and the TAEI-based engine-level decision layer to the cycle-level predictions.
+Step 10 — Final Evaluation
+Calculate:
+•	Cycle-level precision, recall, and F1-score
+•	Engine-level alarm recall, precision, and F1-score
+•	Detected and missed alarm engines
+•	False-alarm engines
+The independent C-MAPSS test set is reserved for final evaluation after model-development decisions have been fixed.
+
+# 5. FD001 Regression Comparisons
+The repository includes the MATLAB implementations used for the principal regression-based comparison:
+Random Forest Regression
+Run:
+MUSTU3_FD001_Regression_Comparison.m
+Weighted Random Forest Regression
+Run:
+MUSTU4_FD001_CostAware_Regression_Comparison.m
+The regression models are evaluated under a common alarm-oriented protocol using the same FD001-derived predictor set and predefined failure-proximity boundary.
+The comparison is intended as a controlled methodological comparison, rather than as a comprehensive benchmark of all contemporary RUL prediction methods.
+The manuscript additionally reports results for LSTM- and CNN-based regression models.
+
+# 6. FD002 Cross-Condition Robustness
+Run:
+MUSTU5_FD002_Class3.m
+FD002 contains six operating conditions and is used to examine cross-condition robustness within the   C-MAPSS benchmark.
+The FD002 experiments evaluate three predictor-set strategies:
+# 6.1 Fixed-Feature Strategy
+The 20 predictor identities selected from FD001 are retained, while the classifier is retrained using FD002 training data.
+# 6.2 Domain-Adapted Strategy
+Predictors are selected using FD002 training data, and the classifier configuration is adapted to the FD002 development environment.
+# 6.3 Common-Feature Strategy
+A common set of 20 predictors is defined using training-data-based feature-selection procedures for FD001 and FD002.
+The FD002 experiments use FD002-specific preprocessing and normalization derived from the FD002 training data.
+FD002 is therefore not treated as a zero-shot transfer experiment or as external validation. Instead, it evaluates robustness under a specific cross-condition shift represented by the C-MAPSS benchmark.
+
+# 7. TAEI: Trajectory-Aware Evidence Integration
+TAEI is the engine-level decision mechanism proposed in the framework.
+TAEI integrates sequential cycle-level alarm evidence using a hierarchical decision structure involving:
+•	Recent trajectory evidence
+•	Alarm-evidence consistency
+•	Global trajectory evidence
+•	A selective global fallback pathway
+The baseline TAEI decision-policy configuration is fixed before independent-test evaluation.
+TAEI is deliberately treated as a decision-layer component rather than an additional predictive model. Consequently, applying TAEI does not alter the cycle-level predictions or cycle-level performance metrics.
+The repository therefore supports separate assessment of:
+•	Predictive-model performance
+•	Probability-threshold effects
+•	Engine-level decision-layer effects
+•	TAEI pathway activation
+•	TAEI sensitivity to alternative fixed parameterizations
+
+# 8. Outputs
+The implementation generates or supports analysis of:
+
+•	Cycle-level normal/warning/alarm predictions
+
+•	Calibrated failure-proximity probabilities
+
+•	Engine-level alarm decisions
+
+•	Alarm precision, recall, and F1-score
+
+•	Engine-level missed-alarm and false-alarm counts
+
+•	Cost-sensitive classification results
+
+•	Regression-versus-classification comparisons
+
+•	TAEI pathway activation statistics
+
+•	TAEI sensitivity and ablation results
+
+•	FD002 cross-condition robustness results
+
+# 9. Dataset Information
+The experiments use the publicly available NASA C-MAPSS turbofan engine degradation benchmark.
+FD001
+•	100 training/test engine trajectories
+•	Single operating condition
+•	Single fault mode
+FD002
+•	260 training/259 test engine trajectories
+•	6 operating conditions
+•	Multiple operating regimes
+The C-MAPSS datasets are not redistributed in this repository. Users should obtain the datasets from their official public source and place them in the appropriate local data directories before execution.
+
+# 10. Reproducibility Notes
+The repository is designed to support reproduction of the principal experiments reported in the manuscript.
+•	Feature-selection results are provided in .mat files.
+•	Engine-level partitioning is used to prevent trajectory-level data leakage.
+•	Model-development decisions are separated from independent-test evaluation.
+•	Random seeds are fixed where applicable.
+•	FD001-derived model configurations and FD002-specific adaptation strategies follow the experimental protocols described in the manuscript.
+•	The independent test data are not used for feature selection, hyperparameter optimization, probability-threshold calibration, or TAEI decision-policy modification.
+•	TAEI parameters are treated as fixed decision-policy parameters for the primary evaluation.
+Because MATLAB Classification Learner models are trained interactively during Stage I, users should follow the workflow described in the manuscript and in the corresponding MATLAB scripts when reproducing the model-screening stage.
+
+# 11. License
 This repository is intended for academic and research purposes only.
-# 9. Contact
+The C-MAPSS datasets are not included in the repository and remain subject to their respective terms of use.
+
+# 12. Citation
+If you use this repository or the associated methodology in your research, please cite the corresponding manuscript:
+MUSTU, M., ARAS, F., & INAL, M.
+Decision-Oriented Prognostics of Aircraft Turbofan Engines: From Failure-Proximity Learning to Engine-Level Alarm Decisions.
+A DOI and formal citation will be added when available.
+
+# 13. Contact
 For questions, collaborations, or research inquiries:
 Murat MUSTU
 Kocaeli University, Türkiye
