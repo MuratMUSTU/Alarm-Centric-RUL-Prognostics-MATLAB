@@ -5,31 +5,86 @@ The repository implements an experimentally decomposed decision-oriented prognos
 1.	Failure-proximity learning
 2.	Probability-based decision calibration
 3.	Cycle-to-engine decision integration
+
 The implementation combines cost-sensitive multi-state classification, engine-grouped model development, Bayesian hyperparameter optimization, probability-threshold calibration, and Trajectory-Aware Evidence Integration (TAEI) as a trajectory-aware hierarchical mechanism for integrating sequential alarm evidence into engine-level decisions.
 Experiments are conducted on the publicly available NASA Commercial Modular Aero-Propulsion System Simulation (C-MAPSS) FD001 and FD002 datasets. FD001 is used for the principal model-development and evaluation workflow, while FD002 is used to examine cross-condition robustness under alternative predictor-set strategies.
 
 # 1. Repository Structure
 # 1.1 MATLAB Implementation Files
 # •	MUSTU1_FD001_Class3.m
-Model screening stage of alarm-centric classification pipeline to determine top five candidate models for FD001 dataset, including preprocessing, feature selection, model training in Classification Learner App, external validation and evaluation.
+Stage I – Model Screening
+Implements the initial FD001 model-development workflow, including:
+
+•	Data preprocessing
+
+•	Feature engineering
+
+•	Health-index construction
+
+•	mRMR-based feature ranking and predictor selection
+
+•	Cost-sensitive training
+
+•	Evaluation of 33 classification models using MATLAB Classification Learner
+
+•	External validation on the held-out validation engines
+
+•	Selection of candidate model families based on alarm-class F1-score
+
 # •	MUSTU2_FD001_Class3.m
-Decision-Oriented Optimization stage of alarm-centric classification pipeline to select final best model for FD001 dataset, including cost-sensitive learning, group-aware cross validation, Bayesian hyperparameter optimization, hierarchical threshold calibration, engine-level decision aggregation, and RUL prediction of alarm engines.
-# •	MUSTU5_FD002_Class3.m
-FD002 deployment pipeline for cross-condition evaluation using FD001-optimized configuration, with model retraining on FD002 and fixed decision thresholds for performance assessment.
+Stage II – Decision-Oriented Model Development and Final Evaluation
+Implements the main FD001 decision-oriented workflow, including:
+
+•	Cost-sensitive model refinement
+
+•	Engine-grouped cross-validation
+
+•	Bayesian hyperparameter optimization
+
+•	Alarm-oriented optimization using alarmF1Loss.m
+
+•	Hierarchical probability-threshold calibration
+
+•	Cycle-level failure-proximity prediction
+
+•	TAEI-based cycle-to-engine decision integration
+
+•	Engine-level alarm evaluation
+
+The final selected FD001 model is an Ensemble Bagged Trees classifier.
+
 # •	MUSTU3_FD001_Regression_Comparison.m
-Conventional regression-based RUL baseline model for FD001.
+Implements the Random Forest (RF) regression baseline used for the controlled comparison between continuous RUL prediction and failure-proximity classification.
+
 # •	MUSTU4_FD001_CostAware_Regression_Comparison.m
-Cost-aware regression baseline incorporating weighted penalties for alarm and warning classes.
+Implements the weighted Random Forest (Weighted RF) regression baseline using alarm-oriented cost weighting.
+
+# •	MUSTU5_FD002_Class3.m
+Implements the FD002 cross-condition robustness experiments. The classifier is retrained on FD002 while alternative predictor-set strategies and decision configurations are evaluated according to the experimental design reported in the manuscript.
+
 # •	alarmF1Loss.m
-Custom evaluation function implementing alarm-oriented F1-score for imbalanced classification and failure detection assessment.
-# 1.2 Data Files
-# •	selectedFeatures1.mat – mRMR-based feature ranking (FD001, top-20 predictors)
-# •	selectedFeatures2.mat – mRMR-based feature ranking (FD002, top-20 predictors)
+Custom loss function implementing the alarm-class F1-based optimization objective used during decision-oriented model optimization.
+
+# 1.2 Feature-Selection Files
+The repository includes precomputed mRMR feature-selection results:
+
+•	selectedFeatures1.mat — FD001 training-derived mRMR ranking and selected top-20 predictors
+
+•	selectedFeatures2.mat — FD002 training-derived mRMR ranking and selected top-20 predictors
+
+•	selectedFeatures3.mat — common top-20 predictors derived from the FD001 and FD002 training sets
+
+These files support reproducibility of the predictor-set strategies examined in the manuscript.
+
 # 2. System Requirements
-# •	MATLAB R2024a (or later recommended)
-# •	Statistics and Machine Learning Toolbox
-# •	Predictive Maintenance Toolbox
-No external or third-party dependencies are required.
+•	MATLAB R2024a or later
+
+•	Machine Learning Toolbox or Predictive Maintenance Toolbox
+
+•	Deep Learning Toolbox for the deep-learning regression comparison models, where applicable
+
+No external third-party software dependencies are required for the core MATLAB implementation.
+
 # 3. Methodological Overview
 The implemented framework consists of a two-stage alarm-centric prognostic architecture:
 1.	Stage I – Model Screening:
