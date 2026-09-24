@@ -13,6 +13,7 @@ Experiments are conducted on the publicly available NASA Commercial Modular Aero
 # 1.1 MATLAB Implementation Files
 # •	MUSTU1_FD001_Class3.m
 Stage I – Model Screening
+
 Implements the initial FD001 model-development workflow, including:
 
 •	Data preprocessing
@@ -33,6 +34,7 @@ Implements the initial FD001 model-development workflow, including:
 
 # •	MUSTU2_FD001_Class3.m
 Stage II – Decision-Oriented Model Development and Final Evaluation
+
 Implements the main FD001 decision-oriented workflow, including:
 
 •	Cost-sensitive model refinement
@@ -86,16 +88,47 @@ These files support reproducibility of the predictor-set strategies examined in 
 No external third-party software dependencies are required for the core MATLAB implementation.
 
 # 3. Methodological Overview
-The implemented framework consists of a two-stage alarm-centric prognostic architecture:
-1.	Stage I – Model Screening:
-Multiple (33) supervised machine learning classifiers are evaluated under cost-sensitive learning to address severe class imbalance in the alarm state.
-2.	Stage II – Decision-Oriented Optimization:
-Selected models are refined using:
-o	Bayesian hyperparameter optimization
-o	Nested engine-level cross-validation
-o	Hierarchical threshold calibration
-o	Engine-level decision aggregation
-The final output is both cycle-level and engine-level maintenance-oriented health-state predictions (normal / warning / alarm) rather than continuous RUL regression. Therefore, the framework emphasizes maintenance-oriented decision support.
+The repository implements a two-stage model-development workflow within a broader three-function decision architecture.
+# 3.1. Failure-Proximity Learning
+Engine health is represented using three failure-proximity states:
+•	Normal
+•	Warning
+•	Alarm
+The baseline FD001 decision boundary defines:
+•	Alarm: RUL < 13 cycles
+•	Warning: 13 ≤ RUL < 38 cycles
+•	Normal: RUL ≥ 38 cycles
+The classification formulation is designed to align the predictive objective with failure-proximity recognition rather than relying exclusively on numerical RUL accuracy.
+# 3.2. Stage I – Model Screening
+Stage I evaluates 33 supervised classification models using cost-sensitive learning.
+The workflow includes:
+•	Training-data preprocessing
+•	Feature engineering
+•	Health-index construction
+•	mRMR feature ranking
+•	Selection of 20 predictors
+•	Cost-sensitive classification
+•	External validation using engine-disjoint validation data
+•	Alarm-oriented model comparison
+Candidate model families are selected primarily according to alarm-class F1-score on the held-out validation engines.
+# 3.3. Stage II – Decision-Oriented Model Development
+Selected candidate models are further developed using:
+•	Engine-grouped cross-validation
+•	Cost-sensitive learning
+•	Bayesian hyperparameter optimization
+•	An alarm-oriented objective based on 1 − F1_alarm
+•	Deterministic random seeds where applicable
+•	Hierarchical probability-threshold calibration
+The probability calibration stage determines separate decision thresholds for the alarm and warning states using the held-out validation data.
+# 3.4. Cycle-to-Engine Decision Integration
+Cycle-level predictions are subsequently transformed into engine-level maintenance decisions.
+Two cycle-to-engine decision transformations are considered:
+1.	Common worst-case aggregation, used as a model-independent benchmark.
+2.	Trajectory-Aware Evidence Integration (TAEI), the proposed engine-level decision layer.
+TAEI is implemented as a trajectory-aware hierarchical decision mechanism that integrates sequential alarm evidence according to its temporal location, intensity, and consistency along the engine trajectory.
+TAEI is a post-classifier decision layer. It does not modify the underlying cycle-level predictions or classifier parameters.
+Its decision-policy configuration is fixed before independent-test evaluation and is not optimized using the independent test set.
+
 # 4. Execution Workflow
 To reproduce the results reported in the manuscript, the following pipeline should be executed:
 4.1 FD001 – Model Development and Selection
