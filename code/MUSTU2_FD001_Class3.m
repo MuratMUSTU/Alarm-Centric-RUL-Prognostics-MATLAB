@@ -1,13 +1,13 @@
-%% SECOND PIPELINE
+%% SECOND PIPELINE (MODEL OPTIMIZATION and SELECTION)
 clc;
 clear;
 load TrainData1sfnr
 
 %For Ablation Study of no preprocessing (using raw data)
-%TrainData1sfnr=TrainData1_raw;
-%ValidationData1sfnr=ValidationData1_raw;
-%TestData1sfnr=TestData1_raw;
-
+%load TrainData1
+%TrainData1sfnr=TrainData1(:,[1,2,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]);
+%ValidationData1sfnr=ValidationData1(:,[1,2,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]);
+%TestData1sfnr=TestData1(:,[1,2,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]);
 
 % Step1-Extract variables
 predictorNames = TrainData1sfnr.Properties.VariableNames;
@@ -53,20 +53,19 @@ cv_inner = cvpartition(cvInnerIndices, 'KFold', 5);
 % Step3-Define custom F1 evaluation function
 % Already defined as alarmF1Loss.m 
 
-
 %% STEP 4A - Train Ensemble Bag (Global Bayesian optimization + Group-Aware CV)
 
 % Define related COST matrix (the best one)
-costMatrix = [0 4 5;
-              3  0  1;
-              4  1  0];
+costMatrix = [0 8 9;
+              9  0  1;
+              10  1  0];
 
 % Global Bayesian optimization for AlarmF1Loss
 %Bag
 optimVars = [
-    optimizableVariable('NumLearningCycles',[100 400],'Type','integer')
-    optimizableVariable('MaxNumSplits',[5 150],'Type','integer')
-    optimizableVariable('MinLeafSize',[1 30],'Type','integer')
+    optimizableVariable('NumLearningCycles',[30 150],'Type','integer')
+    optimizableVariable('MaxNumSplits',[400 16000],'Type','integer')
+    optimizableVariable('MinLeafSize',[1 2],'Type','integer')
 ];
   
 rng(42)
@@ -114,14 +113,13 @@ Ypred(:) = missing;
     objective = alarmF1Loss(Y, Ypred);
 
 end
-
  
 %% STEP 5A - Group-Aware CV Evaluation
 
 %Take best hyperparameters
 bestParams_ens = resultsBO.XAtMinObjective;
-%bestParams_ens.NumLearningCycles=176;
-%bestParams_ens.MaxNumSplits=147;
+%bestParams_ens.NumLearningCycles=106;
+%bestParams_ens.MaxNumSplits=15740;
 %bestParams_ens.MinLeafSize=1;
 
 % Apply manual cross-validation loop
@@ -172,9 +170,10 @@ finalModel_ensb = fitcensemble( ...
 
 % This is our final deployed model
 disp(finalModel_ensb.ClassNames)
-save finalModel_ensb
+%save finalModel_ensb
 finalModel=finalModel_ensb;
 %load finalModel_ensb
+
 % After this step for Ensemble Bagged, PASS TO STEP 8A, 
 % DO NOT PASS to following STEP 4B
 
@@ -240,16 +239,15 @@ Ypred(:) = missing;
     objective = alarmF1Loss(Y, Ypred);
 
 end
-
  
 %% STEP 5B - Group-Aware CV Evaluation
 
 %Take best hyperparameters
 bestParams_ens = resultsBO.XAtMinObjective;
-%bestParams_ens.NumLearningCycles=219;
-%bestParams_ens.LearnRate=0.29124;
-%bestParams_ens.MaxNumSplits=50;
-%bestParams_ens.MinLeafSize=16;
+%bestParams_ens.NumLearningCycles=296;
+%bestParams_ens.LearnRate=0.28917;
+%bestParams_ens.MaxNumSplits=46;
+%bestParams_ens.MinLeafSize=5;
 % Apply manual cross-validation loop
 % Initialize correctly
 Ypred = Y;
@@ -300,53 +298,53 @@ finalModel_ens = fitcensemble( ...
 
 % This is our final deployed model
 disp(finalModel_ens.ClassNames)
-save finalModel_ens
+%save finalModel_ens
 finalModel=finalModel_ens;
 %load finalModel_ens
 % After this step for Ensemble Boosted, PASS TO STEP 8A, 
 % DO NOT PASS to following STEP 4C
-%% STEP 4C-Train Narrow NN (Bayesian optimization + Group CV)
+%% STEP 4C-Train Bilayered NN (Bayesian optimization + Group CV)
 
 % Define COST matrix
-costMatrix = [0 4 5;
-              3  0  1;
-              4  1  0];
+costMatrix = [0 9 10;
+7 0 1;
+8 1 0];
 
-% Narrow NN hyperparameters
+% Bilayered NN hyperparameters
 optimVars = [
-    optimizableVariable('LayerSize',[5 15],'Type','integer')   % Narrow network
-    optimizableVariable('Lambda',[1e-5 1],'Transform','log')   % Regularization
+optimizableVariable('Layer1',[10 100],'Type','integer')
+optimizableVariable('Layer2',[5 50],'Type','integer')
+optimizableVariable('Lambda',[1e-5 1],'Transform','log')
 ];
 
-ObjFcn = @(params) nnObjectiveFcn(params, X, Y, costMatrix, cv_inner);
+ObjFcn = @(params) bilayerNNObjectiveFcn(params, X, Y, costMatrix, cv_inner);
 rng(10,"twister");
 resultsBO = bayesopt(ObjFcn, optimVars, ...
-    'MaxObjectiveEvaluations', 50, ...
-    'IsObjectiveDeterministic', true,...
-    'AcquisitionFunctionName','expected-improvement-plus', ...
-    'Verbose',1, ...
-    'UseParallel', false);
+'MaxObjectiveEvaluations', 50, ...
+'AcquisitionFunctionName','expected-improvement-plus', ...
+'Verbose',1, ...
+'UseParallel', false);
 
-%Objective Function
-function objective = nnObjectiveFcn(params, X, Y, costMatrix, cv_inner)
+% Objective Function
+function objective = bilayerNNObjectiveFcn(params, X, Y, costMatrix, cv_inner)
 rng(1,"twister"); %Fix the global random seed
 Ypred = Y;
 Ypred(:) = missing;
 
 for i = 1:cv_inner.NumTestSets
-    rng(i,"twister"); %Fix the global random seed
-    trainIdx = training(cv_inner, i);
-    testIdx  = test(cv_inner, i);
-    
-    model = fitcnet( ...
-        X(trainIdx,:), Y(trainIdx), ...
-        'LayerSizes', params.LayerSize, ...
-        'Lambda', params.Lambda, ...
-        'Standardize', true, ...
-        'Cost', costMatrix ...
-    );
-    
-    Ypred(testIdx) = predict(model, X(testIdx,:));
+rng(i,"twister"); %Fix the global random seed
+trainIdx = training(cv_inner, i);
+testIdx = test(cv_inner, i);
+
+model = fitcnet( ...
+X(trainIdx,:), Y(trainIdx), ...
+'LayerSizes', [params.Layer1 params.Layer2], ...
+'Lambda', params.Lambda, ...
+'Standardize', true, ...
+'Cost', costMatrix ...
+);
+
+Ypred(testIdx) = predict(model, X(testIdx,:));
 end
 
 objective = alarmF1Loss(Y, Ypred);
@@ -354,101 +352,105 @@ objective = alarmF1Loss(Y, Ypred);
 end
 %% STEP 5C - Group-Aware CV Evaluation
 
-bestParams_nn = resultsBO.XAtMinObjective;
-%bestParams_nn.LayerSize=10;
-%bestParams_nn.Lambda=1.0044e-05;
+bestParams_bnn = resultsBO.XAtMinObjective;
+%bestParams_bnn.Layer1=99;
+%bestParams_bnn.Layer2=10;
+%bestParams_bnn.Lambda=0.00077676;
+
 Ypred = Y;
 Ypred(:) = missing;
 
 for i = 1:cv_outer.NumTestSets
-    rng(i,"twister"); %Fix the global random seed
-    trainIdx = training(cv_outer, i);
-    testIdx  = test(cv_outer, i);
-    
-    model_fold = fitcnet( ...
-        X(trainIdx,:), Y(trainIdx), ...
-        'LayerSizes', bestParams_nn.LayerSize, ...
-        'Lambda', bestParams_nn.Lambda, ...
-        'Standardize', true, ...
-        'Cost', costMatrix ...
-    );
-    
-    Ypred(testIdx) = predict(model_fold, X(testIdx,:));
-end
+rng(i,"twister"); %Fix the global random seed
+trainIdx = training(cv_outer, i);
+testIdx = test(cv_outer, i);
 
+model_fold = fitcnet( ...
+X(trainIdx,:), Y(trainIdx), ...
+'LayerSizes', [bestParams_bnn.Layer1 bestParams_bnn.Layer2], ...
+'Lambda', bestParams_bnn.Lambda, ...
+'Standardize', true, ...
+'Cost', costMatrix ...
+);
+
+Ypred(testIdx) = predict(model_fold, X(testIdx,:));
+end
 
 confMat = confusionmat(Y, Ypred)
 
-% Step 6C —Compute custom loss
-loss_nn = alarmF1Loss(Y, Ypred);
-disp(['Cross-validated Alarm F1 Loss (NN): ', num2str(loss_nn)]);
-% Compare models manually based on F1, NOT MATLAB’s error.
+% Step6f-Compute custom loss
+loss_bnn = alarmF1Loss(Y, Ypred);
 
-%Step7C-Train FINAL model (FULL DATA)
+disp(['Cross-validated Alarm F1 Loss (Bilayered NN): ', num2str(loss_bnn)]);
+
+% Compare models manually based on F1, NOT MATLAB’s error.
+% Select BEST based on LOWEST alarmF1Loss (i.e., highest F1)
+
+% Step7f-Train FINAL model (FULL DATA)
 rng(999,"twister");
-finalModel_nn = fitcnet( ...
-    X, Y, ...
-    'LayerSizes', bestParams_nn.LayerSize, ...
-    'Lambda', bestParams_nn.Lambda, ...
-    'Standardize', true, ...
-    'Cost', costMatrix ...
+finalModel_bnn = fitcnet( ...
+X, Y, ...
+'LayerSizes', [bestParams_bnn.Layer1 bestParams_bnn.Layer2], ...
+'Lambda', bestParams_bnn.Lambda, ...
+'Standardize', true, ...
+'Cost', costMatrix ...
 );
+
 % This is our final deployed model
-disp(finalModel_nn.ClassNames)
-%save finalModel_nn
-finalModel=finalModel_nn;
-%load finalModel_nn
-% After this step for Narrow NN, PASS TO STEP 8A, 
+disp(finalModel_bnn.ClassNames)
+
+%save finalModel_bnn
+
+finalModel = finalModel_bnn;
+%load finalModel_bnn
+% After this step for Bilayered NN, PASS TO STEP 8A, 
 % DO NOT PASS to following STEP 4D
-%% STEP 4D-Train Coarse KNN (Bayesian optimization + Group CV)
+%% STEP 4D-Train Trilayered NN (Bayesian optimization + Group CV)
 
 % Define COST matrix
-costMatrix = [0 4 5;
-3 0 1;
-4 1 0];
+costMatrix = [0 9 10;
+7 0 1;
+8 1 0];
 
-% Coarse KNN hyperparameters
+% Opt1 having tighter search ranges to prevent overfitting 
 optimVars = [
-
-optimizableVariable('NumNeighbors',[5 100],'Type','integer')
-
-optimizableVariable('DistanceMetric', ...
-{'euclidean','cityblock','cosine','correlation'}, ...
-'Type','categorical')
-
-optimizableVariable('DistanceWeight', ...
-{'equal','inverse','squaredinverse'}, ...
-'Type','categorical')
-
+    optimizableVariable('Layer1',[20 80],'Type','integer')
+    optimizableVariable('Layer2',[10 50],'Type','integer')
+    optimizableVariable('Layer3',[5 25],'Type','integer')
+    optimizableVariable('Lambda',[1e-4 1],'Transform','log')
 ];
 
+% Trilayered NN hyperparameters
+%optimVars = [
+%optimizableVariable('Layer1',[20 120],'Type','integer')
+%optimizableVariable('Layer2',[10 80],'Type','integer')
+%optimizableVariable('Layer3',[5 40],'Type','integer')
+%optimizableVariable('Lambda',[1e-5 1],'Transform','log')
+%];
 
-
-ObjFcn = @(params) knnObjectiveFcn(params, X, Y, costMatrix, cv_inner);
+ObjFcn = @(params) trilayerNNObjectiveFcn(params, X, Y, costMatrix, cv_inner);
 rng(10,"twister");
 resultsBO = bayesopt(ObjFcn, optimVars, ...
 'MaxObjectiveEvaluations', 50, ...
-'IsObjectiveDeterministic', true,...
 'AcquisitionFunctionName','expected-improvement-plus', ...
 'Verbose',1, ...
 'UseParallel', false);
 
 % Objective Function
-function objective = knnObjectiveFcn(params, X, Y, costMatrix, cv_inner)
-
+function objective = trilayerNNObjectiveFcn(params, X, Y, costMatrix, cv_inner)
+rng(1,"twister"); %Fix the global random seed
 Ypred = Y;
 Ypred(:) = missing;
 
 for i = 1:cv_inner.NumTestSets
-
+rng(i,"twister"); %Fix the global random seed
 trainIdx = training(cv_inner, i);
 testIdx = test(cv_inner, i);
 
-model = fitcknn( ...
+model = fitcnet( ...
 X(trainIdx,:), Y(trainIdx), ...
-'NumNeighbors', params.NumNeighbors, ...
-'Distance', char(params.DistanceMetric), ...
-'DistanceWeight', char(params.DistanceWeight), ...
+'LayerSizes', [params.Layer1 params.Layer2 params.Layer3], ...
+'Lambda', params.Lambda, ...
 'Standardize', true, ...
 'Cost', costMatrix ...
 );
@@ -462,24 +464,24 @@ end
 
 %% STEP 5D - Group-Aware CV Evaluation
 
-bestParams_knn = resultsBO.XAtMinObjective;
-%bestParams_knn.NumNeighbors=5;
-%bestParams_knn.DistanceMetric='cityblock';
-%bestParams_knn.DistanceWeight='squaredinverse';
+bestParams_tnn = resultsBO.XAtMinObjective;
+%bestParams_tnn.Layer1=80;
+%bestParams_tnn.Layer2=22;
+%bestParams_tnn.Layer3=20;
+%bestParams_tnn.Lambda=0.00065118;
 
 Ypred = Y;
 Ypred(:) = missing;
 
 for i = 1:cv_outer.NumTestSets
-
+rng(i,"twister"); %Fix the global random seed
 trainIdx = training(cv_outer, i);
 testIdx = test(cv_outer, i);
 
-model_fold = fitcknn( ...
+model_fold = fitcnet( ...
 X(trainIdx,:), Y(trainIdx), ...
-'NumNeighbors', bestParams_knn.NumNeighbors, ...
-'Distance', char(bestParams_knn.DistanceMetric), ...
-'DistanceWeight', char(bestParams_knn.DistanceWeight), ...
+'LayerSizes', [bestParams_tnn.Layer1 bestParams_tnn.Layer2 bestParams_tnn.Layer3], ...
+'Lambda', bestParams_tnn.Lambda, ...
 'Standardize', true, ...
 'Cost', costMatrix ...
 );
@@ -489,128 +491,144 @@ end
 
 confMat = confusionmat(Y, Ypred)
 
-% Step 6D-Compute custom loss
-loss_knn = alarmF1Loss(Y, Ypred);
+% Step6f-Compute custom loss
+loss_tnn = alarmF1Loss(Y, Ypred);
 
-disp(['Cross-validated Alarm F1 Loss (KNN): ', num2str(loss_knn)]);
+disp(['Cross-validated Alarm F1 Loss (Trilayered NN): ', num2str(loss_tnn)]);
 
-% Step 7D-Train FINAL model (FULL DATA)
+% Compare models manually based on F1, NOT MATLAB’s error.
+% Select BEST based on LOWEST alarmF1Loss (i.e., highest F1)
+
+% Step7f-Train FINAL model (FULL DATA)
 rng(999,"twister");
-finalModel_knn = fitcknn( ...
+finalModel_tnn = fitcnet( ...
 X, Y, ...
-'NumNeighbors', bestParams_knn.NumNeighbors, ...
-'Distance', char(bestParams_knn.DistanceMetric), ...
-'DistanceWeight', char(bestParams_knn.DistanceWeight), ...
+'LayerSizes', [bestParams_tnn.Layer1 bestParams_tnn.Layer2 bestParams_tnn.Layer3], ...
+'Lambda', bestParams_tnn.Lambda, ...
 'Standardize', true, ...
 'Cost', costMatrix ...
 );
 
-disp(finalModel_knn.ClassNames)
+% This is our final deployed model
+disp(finalModel_tnn.ClassNames)
 
-%save finalModel_knn
+%save finalModel_tnn
 
-finalModel = finalModel_knn;
+finalModel = finalModel_tnn;
 
-% After this step for Coarse KNN, PASS TO STEP 8A, 
+% After this step for Trilayered NN, PASS TO STEP 8A, 
 % DO NOT PASS to following STEP 4E
-%% STEP 4E-Train Medium Neural Network (Bayesian optimization + Group CV)
+%% STEP 4E-Train Quadratic Discriminant
+% Bayesian Optimization + Group CV
 
 % Define COST matrix
-costMatrix = [0 4 5;
-              3  0  1;
-              4  1  0];
+costMatrix = [0 9 10;
+              7 0 1;
+              8 1 0];
 
-% Medium NN hyperparameters
+% Optimize discriminant covariance/model structure
 optimVars = [
-    optimizableVariable('LayerSize',[15 50],'Type','integer')   % Medium network
-    optimizableVariable('Lambda',[1e-5 1],'Transform','log')   % Regularization
+    optimizableVariable('DiscrimType', ...
+        {'linear','diaglinear','quadratic','diagquadratic'}, ...
+        'Type','categorical')
 ];
 
-ObjFcn = @(params) mnnObjectiveFcn(params, X, Y, costMatrix, cv_inner);
+ObjFcn = @(params) discrimObjectiveFcn( ...
+    params, X, Y, costMatrix, cv_inner);
+
 rng(10,"twister");
+
 resultsBO = bayesopt(ObjFcn, optimVars, ...
-    'MaxObjectiveEvaluations', 50, ...
+    'MaxObjectiveEvaluations',50, ...
+    'IsObjectiveDeterministic',true, ...
     'AcquisitionFunctionName','expected-improvement-plus', ...
     'Verbose',1, ...
-    'UseParallel', false);
+    'UseParallel',false);
 
-%Objective Function
-function objective = mnnObjectiveFcn(params, X, Y, costMatrix, cv_inner)
-rng(1,"twister");
+function objective = discrimObjectiveFcn( ...
+    params, X, Y, costMatrix, cv_inner)
+
 Ypred = Y;
 Ypred(:) = missing;
 
 for i = 1:cv_inner.NumTestSets
-    rng(i,"twister");
-    trainIdx = training(cv_inner, i);
-    testIdx  = test(cv_inner, i);
-    
-    model = fitcnet( ...
-        X(trainIdx,:), Y(trainIdx), ...
-        'LayerSizes', params.LayerSize, ...
-        'Lambda', params.Lambda, ...
-        'Standardize', true, ...
-        'Cost', costMatrix ...
-    );
-    
-    Ypred(testIdx) = predict(model, X(testIdx,:));
+
+    trainIdx = training(cv_inner,i);
+    testIdx  = test(cv_inner,i);
+
+    model = fitcdiscr( ...
+        X(trainIdx,:), ...
+        Y(trainIdx), ...
+        'DiscrimType',char(params.DiscrimType), ...
+        'Cost',costMatrix, ...
+        'FillCoeffs','off');
+
+    Ypred(testIdx) = predict( ...
+        model,X(testIdx,:));
+
 end
 
-objective = alarmF1Loss(Y, Ypred);
+objective = alarmF1Loss(Y,Ypred);
 
 end
 
 %% STEP 5E - Group-Aware CV Evaluation
 
-bestParams_mnn = resultsBO.XAtMinObjective;
-%bestParams_mnn.LayerSize=45;
-%bestParams_mnn.Lambda=1.1213e-05;
+bestParams_discrim = resultsBO.XAtMinObjective;
+%bestParams_discrim.DiscrimType='quadratic';
+disp('Best Discriminant Type:');
+disp(bestParams_discrim.DiscrimType);
 
 Ypred = Y;
 Ypred(:) = missing;
 
 for i = 1:cv_outer.NumTestSets
+
     rng(i,"twister");
-    trainIdx = training(cv_outer, i);
-    testIdx  = test(cv_outer, i);
-    
-    model_fold = fitcnet( ...
-        X(trainIdx,:), Y(trainIdx), ...
-        'LayerSizes', bestParams_mnn.LayerSize, ...
-        'Lambda', bestParams_mnn.Lambda, ...
-        'Standardize', true, ...
-        'Cost', costMatrix ...
-    );
-    
-    Ypred(testIdx) = predict(model_fold, X(testIdx,:));
+    trainIdx = training(cv_outer,i);
+    testIdx  = test(cv_outer,i);
+
+    model_fold = fitcdiscr( ...
+        X(trainIdx,:), ...
+        Y(trainIdx), ...
+        'DiscrimType',char(bestParams_discrim.DiscrimType), ...
+        'Cost',costMatrix, ...
+        'FillCoeffs','off');
+
+    Ypred(testIdx) = predict( ...
+        model_fold,X(testIdx,:));
+
 end
 
+confMat = confusionmat(Y,Ypred)
 
-confMat = confusionmat(Y, Ypred)
+loss_discrim = alarmF1Loss(Y,Ypred);
 
-% Step 6E —Compute custom loss
-loss_mnn = alarmF1Loss(Y, Ypred);
-disp(['Cross-validated Alarm F1 Loss (MNN): ', num2str(loss_mnn)]);
-% Compare models manually based on F1, NOT MATLAB’s error.
+disp(['Cross-validated Alarm F1 Loss (Discriminant): ', ...
+    num2str(loss_discrim)]);
 
-%Step 7E-Train FINAL model (FULL DATA)
+% STEP7G-Train FINAL Discriminant Model
+
 rng(999,"twister");
-finalModel_mnn = fitcnet( ...
-    X, Y, ...
-    'LayerSizes', bestParams_mnn.LayerSize, ...
-    'Lambda', bestParams_mnn.Lambda, ...
-    'Standardize', true, ...
-    'Cost', costMatrix ...
-);
-% This is our final deployed model
-disp(finalModel_mnn.ClassNames)
-save finalModel_mnn
-finalModel=finalModel_mnn;
-%load finalModel_mnn
-% After this step for Medium NN, PASS TO STEP 8A, 
-% DO NOT PASS to following Validation & Test evaluation codes 
+
+finalModel_discrim = fitcdiscr( ...
+    X, ...
+    Y, ...
+    'DiscrimType',char(bestParams_discrim.DiscrimType), ...
+    'Cost',costMatrix, ...
+    'FillCoeffs','off');
+
+disp(finalModel_discrim.ClassNames)
+% save finalModel_discrim
+
+finalModel = finalModel_discrim;
+
+
+%load finalModel_discrim
+% After this step for Quadratic Discriminant, PASS TO STEP 8A, 
+% DO NOT PASS to following Validation & Test evaluation codes
 %% Validation & Test evaluation (DO NOT RUN, just for comparison)
-% (IF NO THRESHOLD TUNING and NO ENGINE-LEVEL DECISION, THEN APPLY THIS)
+% (IF BOTH NO THRESHOLD TUNING and NO ENGINE-LEVEL DECISION, THEN APPLY THIS)
 
 % Validation
 Xval = ValidationData1sfnr(:, predictorNames);
@@ -649,7 +667,7 @@ Yval = ValidationData1sfnr.RUL;
 Yval = categorical(lower(string(Yval)), classOrder);
 
 % Apply Threshold Tuning (Find best threshold for Alarm class
-% with Recall ≥ 0.95 and Precision ≥ 0.7 constraint)
+% with Recall ≥ Precision ≥ 0.7 constraint)
 [label, score] = predict(finalModel, Xval);
 
 % Control Class order
@@ -678,7 +696,7 @@ for t = thresholds
     
     results_thresh = [results_thresh; t recall precision F1];
     
-    if recall >= 0.95 && precision >= 0.7 && F1 > bestF1
+    if recall >= precision && precision >= 0.7 && F1 > bestF1
     bestF1 = F1;
     bestThreshold = t;
 end
@@ -708,7 +726,9 @@ function [recall, precision, F1] = alarmMetrics(Ytrue, Ypred)
     F1 = 2 * (precision * recall) / (precision + recall + eps);
 
 end
+
 tAlarm_fixed = bestThreshold;
+%tAlarm_fixed =0.5  %for No threshold calibration
 
 %% STEP 8B-THRESHOLD TUNING FOR WARNING CLASS (VALIDATION)
 
@@ -761,7 +781,7 @@ for tW = thresholdsW
     recall precision F1 warningRecall warningPrecision warningF1];
 
     % Preserve alarm performance
-    if recall >= 0.95 && precision >= 0.70 && warningF1 > bestWF1
+    if recall >= 0.8 && precision >= 0.70 && warningF1 > bestWF1
         bestWF1 = warningF1;
         bestTW = tW;
     end
@@ -805,9 +825,13 @@ Xp_val=tabulate(Ypred)
 
 %% STEP 9 — APPLY THRESHOLD ON TEST WITH WARNING CLASS 
 
-%Calibrated Thrsholds for Narrow NN
-%tAlarm_fixed=0.28515;
-%bestTW=0.36635;
+%Calibrated Thresholds for Ensemble Bagged Trees
+%tAlarm_fixed=0.39981;
+%bestTW=0.36487;
+
+% For No Threshold Calibration
+%tAlarm_fixed=0.5;
+%bestTW=0.5;
 
 classOrder = ["alarm","warning","normal"];
 
@@ -861,9 +885,11 @@ confusionchart(Ytest, Ypred_test);
 %Test Confusion Matrix is appeared.
 Xp_test=tabulate(Ypred_test)
 
-% After this step, PASS TO STEP 10, 
+% After this step, PASS TO STEP 10B, 
 % DO NOT PASS to following Ablation Analysis codes
-%% ABLATION ANALYSIS (IF NO THRESHOLD TUNING THEN APPLY THIS)
+%% FRAMEWORK ABLATION ANALYSIS (DO NOT RUN, just for comparison)
+% IF NO THRESHOLD TUNING THEN APPLY THIS for cycle-level test results
+% Compare the result of this with the ones of selected baseline threshold values as 0.5
 Ytest = TestData1sfnr.RUL;
 Ytest = categorical(lower(string(Ytest)), classOrder);
 
@@ -879,47 +905,52 @@ Xp_test = tabulate(Ypred_test);
 confusionchart(Ytest, Ypred_test);
 
 AlarmF1Loss_test = alarmF1Loss(Ytest, Ypred_test);
-%% ENGINE-LEVEL ANALYSIS for ABLATION ANALYSIS (IF NO THRESHOLD TUNING APPLY THIS)
-% Native classifier argmax decision instead of threshold tuning decision
+%% 10A-ENGINE-LEVEL TRANSFORMATION (Basic worst-case/any-alarm engine aggregation)
+% FRAMEWORK ABLATION ANALYSIS (WITHOUT TAEI)
 
 engineIDs = unique(TestData1sfnr.Engine_ID);
 
-engine_pred = strings(length(engineIDs),1);
+engine_pred_noStrategy = strings(length(engineIDs),1);
 engine_true = strings(length(engineIDs),1);
 
 for i = 1:length(engineIDs)
 
     idx = TestData1sfnr.Engine_ID == engineIDs(i);
 
-    % True label from last cycle
-    true_label = Ytest(find(idx,1,'last'));
-    engine_true(i) = string(true_label);
+    % True engine label from final cycle
+    engine_true(i) = string(Ytest(find(idx,1,'last')));
 
-    % Worst-case engine prediction
-    if any(label_test(idx) == "alarm")
+    % Basic worst-case aggregation using the SAME
+    % threshold-calibrated cycle-level predictions
+    if any(Ypred_test(idx) == "alarm")
 
-        engine_pred(i) = "alarm";
+        engine_pred_noStrategy(i) = "alarm";
 
-    elseif any(label_test(idx) == "warning")
+    elseif any(Ypred_test(idx) == "warning")
 
-        engine_pred(i) = "warning";
+        engine_pred_noStrategy(i) = "warning";
 
     else
 
-        engine_pred(i) = "normal";
+        engine_pred_noStrategy(i) = "normal";
 
     end
 end
 
 engine_true = categorical(engine_true, classOrder);
-engine_pred = categorical(engine_pred, classOrder);
+engine_pred_noStrategy = categorical(engine_pred_noStrategy, classOrder);
 
 [recall_e, precision_e, F1_e] = ...
-    alarmMetric2(engine_true, engine_pred);
+    alarmMetric2(engine_true, engine_pred_noStrategy)
 
-confusionchart(engine_true, engine_pred);
+confusionchart(engine_true, engine_pred_noStrategy)
+%Engine-level Test Confusion Matrix is appeared.
+tabulate(engine_pred_noStrategy)
 
-tabulate(engine_pred)
+% Finding Predicted Alarm Engines
+Engines_Compare=table(engineIDs,engine_true,engine_pred_noStrategy);
+Engines_Alarm=Engines_Compare(engine_pred_noStrategy=='alarm',:)
+%Predicted alarm engines' numbers are appeared without prioritization.
 
 % Metric Function
 
@@ -941,7 +972,7 @@ function [recall, precision, F1] = alarmMetric2(Ytrue, Ypred)
 
 end
 
-%% STEP 10 — ENGINE LEVEL DECISION STAGE
+%% STEP 10B — ENGINE LEVEL TRANSFORMATION (TAEI DECISION STAGE)
 
 engineIDs = unique(TestData1sfnr.Engine_ID);
 
@@ -1053,48 +1084,655 @@ function [recall, precision, F1] = alarmMetric(Ytrue, Ypred)
     F1 = 2 * (precision * recall) / (precision + recall + eps);
 
 end
-%% STEP 11 - Finding Predicted Alarm Engines
+% Finding Predicted Alarm Engines
 Engines_Compare=table(engineIDs,engine_true,engine_pred);
 Engines_Alarm=Engines_Compare(engine_pred=='alarm',:)
 %Predicted alarm engines' numbers are appeared without prioritization.
 
-%% STEP 12 - Evaluate Test Results
-mukayese=table(TestData1sfnr.Engine_ID,TestData1sfnr.Time,Ytest,Ypred_test,TestData1sfnr.TTF);
-mukayese.Properties.VariableNames=[{'Engine_ID'} {'Time'} {'True_Class'} {'Predicted_Class'} {'True_RUL'}];
-mukayese1=mukayese(mukayese.True_Class=='alarm',:);
+%% ENGINE LEVEL DECISION STAGE+ BRANCH ACTIVATION AUDIT
 
-%Predicting RULs of the alarm classes
-%Find the predicted alarms rows.
-muk1_alarm=mukayese(mukayese.Predicted_Class=='alarm',:);
-filtered_Alarms = muk1_alarm(ismember(muk1_alarm.Engine_ID, Engines_Alarm.engineIDs), :);
+% load alarmF1Loss_test %for Ensemble Bagged Trees
 
-RULr_alarm=zeros(length(filtered_Alarms.Engine_ID),1);
-for i=1:(length(filtered_Alarms.Engine_ID)-1) 
-    RULr_alarm(1,:)=12;
-    if filtered_Alarms.Engine_ID(i+1,:)==filtered_Alarms.Engine_ID(i,:)
-       RULr_alarm(i+1,:)=RULr_alarm(i,:)-1;
-    else 
-       RULr_alarm(i+1,:)=12;
+engineIDs = unique(TestData1sfnr.Engine_ID);
+nEngines = length(engineIDs);
+
+% Preallocate outputs
+engine_pred = strings(nEngines,1);
+engine_true = strings(nEngines,1);
+decision_branch = strings(nEngines,1);
+
+% Diagnostic variables
+top_recent_values    = zeros(nEngines,1);
+top_global_values    = zeros(nEngines,1);
+recent_ratio_values  = zeros(nEngines,1);
+top_warning_values   = zeros(nEngines,1);
+
+% Optional diagnostic conditions
+recent_alarm_condition  = false(nEngines,1);
+global_alarm_condition  = false(nEngines,1);
+warning_condition       = false(nEngines,1);
+
+for i = 1:nEngines
+
+    idx = TestData1sfnr.Engine_ID == engineIDs(i);
+    
+    % Scores
+    scores_e = score_alarm_test(idx);
+    scores_w = score_warning_test(idx);
+    
+    % TRUE label (last cycle)
+    true_label = Ytest(find(idx,1,'last'));
+    engine_true(i) = string(true_label);
+
+    % TIME-AWARE WINDOW 
+    N = length(scores_e);
+    window_fraction = 0.20;
+    last_window = max(1, round(window_fraction * N));
+
+    start_idx = max(1, N - last_window + 1);
+    recent_scores = scores_e(start_idx:N);
+
+    % ALARM FEATURE 1:
+    % TOP-K RECENT ALARM EVIDENCE (window)
+    K = 2;
+    recent_sorted = sort(recent_scores, 'descend');
+
+    if length(recent_sorted) >= K
+        top_recent = mean(recent_sorted(1:K));
+    else
+        top_recent = mean(recent_sorted);
+    end
+
+    % ALARM FEATURE 2:
+    % GLOBAL STRONG SIGNAL (fallback)
+    K_global = 2;
+    global_sorted = sort(scores_e, 'descend');
+
+    if length(global_sorted) >= K_global
+        top_global = mean(global_sorted(1:K_global));
+    else
+        top_global = mean(global_sorted);
+    end
+
+    % WARNING Feature
+    Kw = 2;
+    scores_w_sorted = sort(scores_w, 'descend');
+
+    if length(scores_w_sorted) >= Kw
+        topW = mean(scores_w_sorted(1:Kw));
+    else
+        topW = mean(scores_w_sorted);
+    end
+
+
+
+    % CONSISTENCY FEATURE
+    recent_ratio = sum(recent_scores >= tAlarm_fixed) / length(recent_scores);
+
+    % STORE DIAGNOSTIC VALUES
+    top_recent_values(i)   = top_recent;
+    top_global_values(i)   = top_global;
+    recent_ratio_values(i) = recent_ratio;
+    top_warning_values(i)  = topW;
+
+    % DECISION CONDITIONS
+    recent_alarm_condition(i) = (top_recent >= tAlarm_fixed) && (recent_ratio >= 0.05);
+
+    global_alarm_condition(i) = (top_global >= tAlarm_fixed * 1.2) && (recent_ratio >= 0.03);
+
+    warning_condition(i) = (topW >= bestTW);
+
+    % FINAL HIERARCHICAL DECISION
+    if recent_alarm_condition(i)
+
+        engine_pred(i) = "alarm";
+        decision_branch(i) = "recent_alarm";
+
+    elseif global_alarm_condition(i)
+
+        engine_pred(i) = "alarm";
+        decision_branch(i) = "global_fallback";
+
+    elseif warning_condition(i)
+
+        engine_pred(i) = "warning";
+        decision_branch(i) = "warning";
+
+    else
+
+        engine_pred(i) = "normal";
+        decision_branch(i) = "normal";
+
     end
 end
-filtered_Alarms.Predicted_RUL=RULr_alarm;
-filtered_Alarms.Predicted_FailureTime=filtered_Alarms.Time+filtered_Alarms.Predicted_RUL;
-% Evaluate and Prioritize Alarm Predictions
-predr_alarm=filtered_Alarms(:,[1 2 6 7 5]);
-n=1;
-for i=1:(length(filtered_Alarms.Engine_ID)-1)
-    if predr_alarm.Engine_ID(i,:)~=predr_alarm.Engine_ID(i+1,:)
-        predr_alarm1(n,:)=predr_alarm(i,:);
-        n=n+1;
-    elseif predr_alarm.Engine_ID(i,:)==predr_alarm.Engine_ID(i+1,:)
-        while predr_alarm.Engine_ID==predr_alarm.Engine_ID(i,:)
-            idx=(min(predr_alarm.Predicted_RUL));
-            predr_alarm1(n,:)=predr_alarm(idx,:);
-            n=n+1;
-        end
-    end
+
+% Metrics
+engine_true_cat = categorical(engine_true, ...
+    ["alarm","warning","normal"]);
+
+engine_pred_cat = categorical(engine_pred, ...
+    ["alarm","warning","normal"]);
+
+[recall_e, precision_e, F1_e] = ...
+    alarmMetricR(engine_true_cat, engine_pred_cat)
+
+% CONFUSION MATRIX
+figure;
+confusionchart(engine_true_cat, engine_pred_cat);
+%Engine-level Test Confusion Matrix is appeared.
+
+%BRANCH ACTIVATION SUMMARY
+disp('Predicted classes:')
+tabulate(engine_pred)
+
+disp('Decision branches:')
+tabulate(decision_branch)
+
+% DIAGNOSTIC TABLE
+diagnosticTable = table( ...
+    engineIDs, ...
+    engine_true, ...
+    engine_pred, ...
+    top_recent_values, ...
+    top_global_values, ...
+    recent_ratio_values, ...
+    top_warning_values, ...
+    recent_alarm_condition, ...
+    global_alarm_condition, ...
+    warning_condition, ...
+    decision_branch);
+
+disp(diagnosticTable)
+
+%table(engineIDs, engine_true, engine_pred, decision_branch);
+
+
+% Metric Function
+
+function [recall, precision, F1] = alarmMetricR(Ytrue, Ypred)
+
+    classOrder = ["alarm","warning","normal"];
+    Ytrue = categorical(lower(string(Ytrue)), classOrder);
+    Ypred = categorical(lower(string(Ypred)), classOrder);
+
+    alarmClass = "alarm";
+  
+    tp = sum((Ytrue == alarmClass) & (Ypred == alarmClass));
+    fn = sum((Ytrue == alarmClass) & (Ypred ~= alarmClass));
+    fp = sum((Ytrue ~= alarmClass) & (Ypred == alarmClass));
+
+    recall = tp / (tp + fn + eps);
+    precision = tp / (tp + fp + eps);
+    F1 = 2 * (precision * recall) / (precision + recall + eps);
+
 end
-predr_alarm1=[predr_alarm1;predr_alarm(end,:)];
-predr_alarm1=sortrows(predr_alarm1,"Predicted_RUL")
-%At the end of this pipeline2, predicted RULs of predicted each alarm
-% engines are appeared with maintenance priority.
+
+% Show he results 
+fprintf('Recent alarm condition satisfied: %d\n', ...
+    sum(recent_alarm_condition));
+
+fprintf('Global alarm condition satisfied: %d\n', ...
+    sum(global_alarm_condition));
+
+fprintf('Global only (fallback uniquely needed): %d\n', ...
+    sum(global_alarm_condition & ~recent_alarm_condition));
+
+fprintf('Both recent and global conditions satisfied: %d\n', ...
+    sum(global_alarm_condition & recent_alarm_condition));
+diagnosticTable( ...
+    global_alarm_condition & ~recent_alarm_condition, :)
+diagnosticTable( ...
+    global_alarm_condition & recent_alarm_condition, :)
+%% FIVE-CONFIGURATION ABLATION STUDY
+%clc;
+%clear;
+% load alarmF1Loss_test %for Ensemble Bagged Trees
+
+% Components:
+%
+% R = Recent alarm strength
+%     top_recent >= tAlarm_fixed
+%
+% C = Recent alarm consistency
+%     recent_ratio >= 0.05
+%
+% G = Global strong-evidence fallback
+%     top_global >= 1.2*tAlarm_fixed
+%     AND recent_ratio >= 0.03
+%
+% Configurations:
+%
+% B0 = Neither R nor C nor G
+% B1 = R only
+% B2 = C only
+% B3 = R + C
+% B4 = R + C + G   --> Full proposed mechanism
+%
+% Warning branch is applied when the corresponding alarm
+% condition is not satisfied and topW >= bestTW.
+%
+
+engineIDs = unique(TestData1sfnr.Engine_ID);
+nEngines = length(engineIDs);
+
+% ---------------------------------------------------------------
+% PREALLOCATE
+% ---------------------------------------------------------------
+
+engine_true = strings(nEngines,1);
+
+pred_B0 = strings(nEngines,1);
+pred_B1 = strings(nEngines,1);
+pred_B2 = strings(nEngines,1);
+pred_B3 = strings(nEngines,1);
+pred_B4 = strings(nEngines,1);
+
+% Diagnostic variables
+top_recent_values  = zeros(nEngines,1);
+top_global_values  = zeros(nEngines,1);
+recent_ratio_values = zeros(nEngines,1);
+top_warning_values = zeros(nEngines,1);
+
+recent_condition = false(nEngines,1);
+consistency_condition = false(nEngines,1);
+global_condition = false(nEngines,1);
+warning_condition = false(nEngines,1);
+
+% ---------------------------------------------------------------
+% ENGINE-LEVEL LOOP
+% ---------------------------------------------------------------
+
+for i = 1:nEngines
+
+    idx = TestData1sfnr.Engine_ID == engineIDs(i);
+
+    % Scores
+    scores_e = score_alarm_test(idx);
+    scores_w = score_warning_test(idx);
+
+    % TRUE ENGINE LABEL
+    true_label = Ytest(find(idx,1,'last'));
+    engine_true(i) = string(true_label);
+
+    % -----------------------------------------------------------
+    % TIME-AWARE WINDOW
+    % ------------------------------------------------------------
+
+    N = length(scores_e);
+
+    last_window = max(1, round(0.20 * N));
+
+    start_idx = max(1, N - last_window + 1);
+
+    recent_scores = scores_e(start_idx:N);
+
+    % -----------------------------------------------------------
+    % R — TOP-K RECENT ALARM STRENGTH
+    % ------------------------------------------------------------
+
+    K = 2;
+
+    recent_sorted = sort(recent_scores,'descend');
+
+    if length(recent_sorted) >= K
+        top_recent = mean(recent_sorted(1:K));
+    else
+        top_recent = mean(recent_sorted);
+    end
+
+    % -----------------------------------------------------------
+    % GLOBAL ALARM STRENGTH
+    % ------------------------------------------------------------
+
+    K_global = 2;
+
+    global_sorted = sort(scores_e,'descend');
+
+    if length(global_sorted) >= K_global
+        top_global = mean(global_sorted(1:K_global));
+    else
+        top_global = mean(global_sorted);
+    end
+
+    % -----------------------------------------------------------
+    % WARNING STRENGTH
+    % ------------------------------------------------------------
+
+    Kw = 2;
+
+    scores_w_sorted = sort(scores_w,'descend');
+
+    if length(scores_w_sorted) >= Kw
+        topW = mean(scores_w_sorted(1:Kw));
+    else
+        topW = mean(scores_w_sorted);
+    end
+
+    % -----------------------------------------------------------
+    % C — RECENT ALARM CONSISTENCY
+    % ------------------------------------------------------------
+
+    recent_ratio = ...
+        sum(recent_scores >= tAlarm_fixed) / length(recent_scores);
+
+    % -----------------------------------------------------------
+    % STORE DIAGNOSTIC VALUES
+    % ------------------------------------------------------------
+
+    top_recent_values(i) = top_recent;
+    top_global_values(i) = top_global;
+    recent_ratio_values(i) = recent_ratio;
+    top_warning_values(i) = topW;
+
+    % -----------------------------------------------------------
+    % THREE BASIC CONDITIONS
+    % ------------------------------------------------------------
+
+    R = (top_recent >= tAlarm_fixed);
+
+    C = (recent_ratio >= 0.05);
+
+    % Global fallback condition
+    G = (top_global >= tAlarm_fixed * 1.2) && ...
+        (recent_ratio >= 0.03);
+
+    W = (topW >= bestTW);
+
+    recent_condition(i) = R;
+    consistency_condition(i) = C;
+    global_condition(i) = G;
+    warning_condition(i) = W;
+
+    % ===========================================================
+    % B0 — NEITHER R NOR C NOR G
+    % ===========================================================
+
+    if W
+        pred_B0(i) = "warning";
+    else
+        pred_B0(i) = "normal";
+    end
+
+    % ===========================================================
+    % B1 — RECENT STRENGTH ONLY
+    % ===========================================================
+
+    if R
+        pred_B1(i) = "alarm";
+
+    elseif W
+        pred_B1(i) = "warning";
+
+    else
+        pred_B1(i) = "normal";
+    end
+
+    % ===========================================================
+    % B2 — CONSISTENCY ONLY
+    % ===========================================================
+
+    if C
+        pred_B2(i) = "alarm";
+
+    elseif W
+        pred_B2(i) = "warning";
+
+    else
+        pred_B2(i) = "normal";
+    end
+
+    % ===========================================================
+    % B3 — RECENT STRENGTH + CONSISTENCY
+    % ===========================================================
+
+    if R && C
+        pred_B3(i) = "alarm";
+
+    elseif W
+        pred_B3(i) = "warning";
+
+    else
+        pred_B3(i) = "normal";
+    end
+
+    % ===========================================================
+    % B4 — FULL PROPOSED:
+    %      RECENT + CONSISTENCY + GLOBAL FALLBACK
+    % ===========================================================
+
+    if R && C
+
+        % Primary time-aware alarm
+        pred_B4(i) = "alarm";
+
+    elseif G
+
+        % Global strong-evidence rescue
+        pred_B4(i) = "alarm";
+
+    elseif W
+
+        pred_B4(i) = "warning";
+
+    else
+
+        pred_B4(i) = "normal";
+
+    end
+
+end
+
+% ---------------------------------------------------------------
+% CONVERT TO CATEGORICAL
+% ---------------------------------------------------------------
+
+classOrder = ["alarm","warning","normal"];
+
+Ytrue = categorical(engine_true,classOrder);
+
+Y_B0 = categorical(pred_B0,classOrder);
+Y_B1 = categorical(pred_B1,classOrder);
+Y_B2 = categorical(pred_B2,classOrder);
+Y_B3 = categorical(pred_B3,classOrder);
+Y_B4 = categorical(pred_B4,classOrder);
+
+% ---------------------------------------------------------------
+% CALCULATE METRICS
+% ---------------------------------------------------------------
+
+[Recall_B0, Precision_B0, F1_B0] = ...
+    alarmMetricR5(Ytrue,Y_B0);
+
+[Recall_B1, Precision_B1, F1_B1] = ...
+    alarmMetricR5(Ytrue,Y_B1);
+
+[Recall_B2, Precision_B2, F1_B2] = ...
+    alarmMetricR5(Ytrue,Y_B2);
+
+[Recall_B3, Precision_B3, F1_B3] = ...
+    alarmMetricR5(Ytrue,Y_B3);
+
+[Recall_B4, Precision_B4, F1_B4] = ...
+    alarmMetricR5(Ytrue,Y_B4);
+
+% ---------------------------------------------------------------
+% ALARM COUNTS
+% ---------------------------------------------------------------
+
+AlarmCount_B0 = sum(Y_B0 == "alarm");
+AlarmCount_B1 = sum(Y_B1 == "alarm");
+AlarmCount_B2 = sum(Y_B2 == "alarm");
+AlarmCount_B3 = sum(Y_B3 == "alarm");
+AlarmCount_B4 = sum(Y_B4 == "alarm");
+
+% ---------------------------------------------------------------
+% RESULTS TABLE
+% ---------------------------------------------------------------
+
+Configuration = [
+    "B0_Neither"
+    "B1_RecentOnly"
+    "B2_ConsistencyOnly"
+    "B3_Both"
+    "B4_Both_GlobalFallback"
+    ];
+
+EngineRecall = [
+    Recall_B0
+    Recall_B1
+    Recall_B2
+    Recall_B3
+    Recall_B4
+    ];
+
+EnginePrecision = [
+    Precision_B0
+    Precision_B1
+    Precision_B2
+    Precision_B3
+    Precision_B4
+    ];
+
+EngineF1 = [
+    F1_B0
+    F1_B1
+    F1_B2
+    F1_B3
+    F1_B4
+    ];
+
+AlarmCount = [
+    AlarmCount_B0
+    AlarmCount_B1
+    AlarmCount_B2
+    AlarmCount_B3
+    AlarmCount_B4
+    ];
+
+ablationResults = table( ...
+    Configuration, ...
+    EngineRecall, ...
+    EnginePrecision, ...
+    EngineF1, ...
+    AlarmCount);
+
+disp(ablationResults);
+
+% ---------------------------------------------------------------
+% ENGINE-LEVEL DIAGNOSTIC TABLE
+% ---------------------------------------------------------------
+
+diagnosticTable_B = table( ...
+    engineIDs, ...
+    engine_true, ...
+    pred_B0, ...
+    pred_B1, ...
+    pred_B2, ...
+    pred_B3, ...
+    pred_B4, ...
+    top_recent_values, ...
+    top_global_values, ...
+    recent_ratio_values, ...
+    top_warning_values, ...
+    recent_condition, ...
+    consistency_condition, ...
+    global_condition, ...
+    warning_condition);
+
+disp(diagnosticTable_B);
+
+% ---------------------------------------------------------------
+% METRIC FUNCTION
+% ---------------------------------------------------------------
+
+function [recall, precision, F1] = alarmMetricR5(Ytrue,Ypred)
+
+    classOrder = ["alarm","warning","normal"];
+
+    Ytrue = categorical(lower(string(Ytrue)),classOrder);
+    Ypred = categorical(lower(string(Ypred)),classOrder);
+
+    alarmClass = "alarm";
+
+    tp = sum((Ytrue == alarmClass) & ...
+             (Ypred == alarmClass));
+
+    fn = sum((Ytrue == alarmClass) & ...
+             (Ypred ~= alarmClass));
+
+    fp = sum((Ytrue ~= alarmClass) & ...
+             (Ypred == alarmClass));
+
+    recall = tp / (tp + fn + eps);
+
+    precision = tp / (tp + fp + eps);
+
+    F1 = 2 * (precision * recall) / ...
+         (precision + recall + eps);
+
+end
+% B1 vs B2
+
+idx_B1_B2 = pred_B1 ~= pred_B2;
+
+fprintf('B1 vs B2 disagreement count: %d\n', ...
+    sum(idx_B1_B2));
+
+diagnosticTable_B(idx_B1_B2,:)
+
+% B1 vs B3
+
+idx_B1_B3 = pred_B1 ~= pred_B3;
+
+fprintf('B1 vs B3 disagreement count: %d\n', ...
+    sum(idx_B1_B3));
+
+diagnosticTable_B(idx_B1_B3,:)
+
+% B2 vs B3
+
+idx_B2_B3 = pred_B2 ~= pred_B3;
+
+fprintf('B2 vs B3 disagreement count: %d\n', ...
+    sum(idx_B2_B3));
+
+diagnosticTable_B(idx_B2_B3,:)
+
+% B3 vs B4 — EFFECT OF GLOBAL FALLBACK
+
+idx_B3_B4 = pred_B3 ~= pred_B4;
+
+fprintf('B3 vs B4 disagreement count: %d\n', ...
+    sum(idx_B3_B4));
+
+diagnosticTable_B(idx_B3_B4,:)
+
+% Which engines are rescued by global fallback?
+
+rescued = ...
+    (pred_B3 ~= "alarm") & ...
+    (pred_B4 == "alarm");
+
+EnginesRescuedByGlobalFallback=diagnosticTable_B(rescued,:)
+
+
+% Which global-fallback alarms are false?
+
+global_false_alarm = ...
+    (pred_B3 ~= "alarm") & ...
+    (pred_B4 == "alarm") & ...
+    (engine_true ~= "alarm");
+
+
+% Which global-fallback alarms are true alarms?
+
+global_true_alarm = ...
+    (pred_B3 ~= "alarm") & ...
+    (pred_B4 == "alarm") & ...
+    (engine_true == "alarm");
+
+TrueGlobalFallbackAlarms=diagnosticTable_B(global_true_alarm,:)
+
+FalseGlobalFallbackAlarms=diagnosticTable_B(global_false_alarm,:)
+
+
