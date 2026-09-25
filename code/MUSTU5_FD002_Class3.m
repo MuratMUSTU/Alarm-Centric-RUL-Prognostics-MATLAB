@@ -1,4 +1,4 @@
-%% DATA LOADING (Load Raw Data to MATLAB's Workspace)
+%% 1.DATA LOADING (Load Raw Data to MATLAB's Workspace)
 %The 260 different engine is operating normally at the beginning,
 %and develops a fault (HPC degredation) during at some point the series.
 %In training set, the fault grows in magnitude until failure. In test set,
@@ -14,7 +14,7 @@ TrainData2=engine_data2;
 %To add variablenames to test data;
 engine_testdata2.Properties.VariableNames = ["Engine_ID","Time","Op_Set1","Op_Set2","Op_Set3","T2","T24","T30","T50","P2","P15","P30","Nf","Nc","epr","Ps30","phi","NRf","NRc","BPR","farB","htBleed","Nf_dmd","PcNfR_dmd","W31","W32"];
 TestData2=engine_testdata2;
-%% DATA ANALYSIS
+%% 2.DATA ANALYSIS
 %Checkpoint1
 head(TrainData2,3) %To see the first 3 rows of training data
 summary(TrainData2);
@@ -33,8 +33,10 @@ xlabel('Engine No')
 ylabel('Number of Flights (Cycles)')
 title('Number of Flights of Engines to Failure')
 Cycle_min=min(Checkpoint2.GroupCount);
+Cycle_mean=mean(Checkpoint2.GroupCount);
 Cycle_max=max(Checkpoint2.GroupCount);
 disp(['Lowest Cycle: ', num2str(Cycle_min)]);
+disp(['Mean Cycle: ', num2str(Cycle_mean)]);
 disp(['Highest Cycle: ', num2str(Cycle_max)]);
 % The lowest cycle is 128 of Engine Nu.244, and the highest cycle is 378 of Engine Nu.112
 
@@ -60,7 +62,7 @@ for i=1:12
     xlabel('Time')
 end
 
-%% RUL CLASS DEFINITION AND GENERATION
+%% 3.RUL CLASS DEFINITION AND GENERATION
 %Revise training table data including TTF(RUL) variables.
 IDs = TrainData2{:,1};
 n = length(unique(IDs));
@@ -76,8 +78,8 @@ TrainData2.TTF=TTF';
 %arbitrary boundaries to create three different classes. We will attempt to
 %classify each point as being alarm (urgently) in need of maintenance, or having a
 % warning (short) time until maintenance is needed, or normal (no maintenance need).
-Thresh_alarm=round(10*Cycle_min/100);
-Thresh_warning=round(30*Cycle_min/100);
+Thresh_alarm=13;
+Thresh_warning=38;
 catThreshold=[Thresh_alarm,Thresh_warning,Cycle_max];
 %If RUL<13 Alarm, 13=<RUL<38 Warning, 38=<RUL Normal
 %To convert numerical TTF data to the categorical RUL data
@@ -103,7 +105,7 @@ TestData2.TTF=RTF';
 TTF_testc = discretize(RTF',[0 Thresh_alarm Thresh_warning Cycle_max],"categorical",["alarm" "warning" "normal"]);
 TestData2.RUL=TTF_testc;
 
-%% ENGINE LEVEL DATA PARTITIONING (%80 for training and %20 for validation)
+%% 4.ENGINE LEVEL DATA PARTITIONING (%80 for training and %20 for validation)
 %To convert table data to cell array data
 IDs = TrainData2{:,1};
 nID = unique(IDs);
@@ -125,7 +127,7 @@ ValidationData2= vertcat(ValidationData{:}) %raw table data of 20 engines
 % Now, raw training, validation, and test datasets are ready to save.
 save TrainData2
 
-%% Visualize All Sensor Data in Categories
+%% Visualize All Sensor Data in Categories (OPTIONAL)
 figure
 for ii=1:9
 h(ii)=subplot(3,3,ii);
@@ -143,14 +145,15 @@ for ii=1:12
 end
 %The signals of the 21 sensors don't show any degradation trend due to the
 %different operation conditions. But we should remove the same 7 sensor data of FD001
-%% DATA PREPROCESSING (REMOVE UNUSABLE SAME DATA)
-load TrainData2
-%Select the useful variables of training and test data. (Feature Selection)
+%% 5.DATA PREPROCESSING (REMOVE SAME FEATURE OF FD001)
+%load TrainData2
+%Select the same FD001 variables of FD002 training and test data. (Feature Selection)
+%Although some deleted sensors can be usuable for FD002.
 TrainData2=TrainData2(:,[1 2 3 4 5 7 8 9 12 13 14 16 17 18 19 20 22 25 26 27 28]);
 ValidationData2=ValidationData2(:,[1 2 3 4 5 7 8 9 12 13 14 16 17 18 19 20 22 25 26 27 28]);
 TestData2=TestData2(:,[1 2 3 4 5 7 8 9 12 13 14 16 17 18 19 20 22 25 26 27 28]);
 
-%% DATA PREPROCESSING-SMOOTHING (REMOVE NOISE)
+%% 6. DATA PREPROCESSING-SMOOTHING (REMOVE NOISE)
 
 % Step1-Define operating regime segments (cluster) before regime-aware smoothing
 % Operating condition variables
@@ -287,8 +290,8 @@ for i=1:15
     title(ID1.Properties.VariableNames{5+i})
     xlabel('Time')
 end
-%% FEATURE ENGINEERING (ENGINE-LEVEL ONLY)
-load TrainData2s
+%% 7.FEATURE ENGINEERING (ENGINE-LEVEL ONLY)
+%load TrainData2s
 % For training data, add features by making feature engineering
 % Long-term features are intentionally excluded to improve robustness
 % under multiple operating conditions (FD002).
@@ -506,8 +509,8 @@ TestData2sf = TestData2s(rowsToKeep,:);
 save TrainData2sf
 ID1=TrainData2sf(TrainData2sf.Engine_ID==1,:)
 
-%% TRAINING DATA NORMALIZATION
-%load TrainData2sf
+%% 8.TRAINING DATA NORMALIZATION FOR FD002
+%load TrainData2sf %(Smoothed and feature-engineered FD002 training data)
 % STEP 2 — Cluster-based normalization (TRAIN)
 sensorVars = {'T24','T30','T50','P30','Nf','Nc','Ps30','phi','NRf','NRc','BPR','htBleed','W31','W32',...
     'dT24','dT30','dT50','dP30','dNf','dNc','dPs30','dphi','dNRf','dNRc','dBPR','dhtBleed','dW31','dW32',...
@@ -551,7 +554,7 @@ end
 TrainData2sf{:, sensorVars} = Xnorm;
 TrainData2sfn=TrainData2sf
 
-%% VALIDATION AND TEST DATA NORMALIZATION
+%% 9.VALIDATION AND TEST DATA NORMALIZATION
 % Validation normalization
 Xnorm_val = zeros(size(ValidationData2sf{:, sensorVars}));
 
@@ -617,8 +620,8 @@ for i=1:12
     xlabel('Time')
 end
 %After normalization, basic 14 sensor signals showed trend.
-%% CREATING HEALTH INDEX AS A NEW FEATURE
-load TrainData2sfn
+%% 10.CREATING HEALTH INDEX AS A NEW FEATURE
+%load TrainData2sfn
 
 rng(1,"twister"); %Fix the global random seed
 basic_vars = {'T24','T30','T50','P30','Nf','Nc','Ps30','phi','NRf','NRc','BPR','htBleed','W31','W32'}; %Basic 14 sensors
@@ -675,8 +678,30 @@ HI_test_norm = (HI_test - mu_HI) / std_HI;
 TestData2sfn.HealthIndex = HI_test_norm;
 % We have totally 57 features consist of 14 sensor data and 43 generated data
 %save TestData2sfn
-%% FEATURE RANKING and SELECTION OF TOP 20 PREDICTORS
+% After this step for Creating Health Index as 57th feature, 
+% PASS ONLY TO STEP 11A for Fixed-Feature Robustness, OR
+% PASS ONLY TO STEP 11B for Domain Adapted Robustness, OR
+% PASS ONLY TO STEP 11C for Common-Feature Robustness, OR
+%% 11A.SELECT TOP 20 FD001 PREDICTORS (for fixed-feature robustness.)
 load TestData2sfn
+load selectedFeatures1
+rng(1,"twister"); %Fix the global random seed for reproducibility
+columns_top_pred= {'Engine_ID','Time',topFeatures{:,:},'TTF','RUL'};
+
+%You can use below alternative codes for fixed Top 20 predictors from FD001
+%training data using baseline alarm threshold
+%columns_top_pred= {'Engine_ID','Time','HealthIndex','Nc','dT50','T24_trend5','dW32','dBPR','P30_trend10','dT30','phi_trend5','Ps30_trend10','W31_trend10','BPR_trend10','T50_trend10','W32_trend10','NRf_trend10','NRc_trend10','T24','Nf_trend10','T30','phi_trend10','TTF','RUL'};
+
+TrainData2sfnr=TrainData2sfn(:, columns_top_pred);
+TestData2sfnr=TestData2sfn(:, columns_top_pred);
+ValidationData2sfnr=ValidationData2sfn(:, columns_top_pred);
+%save TrainData2sfnr
+
+%TrainData2sfnr, preprocessed FD001-derivative 20 predictors for FD002 are ready for second pipeline. 
+
+%% 11B.FEATURE RANKING and SELECTION OF TOP 20 PREDICTORS OF FD002
+% (ONLY FOR DOMAIN ADAPTED ROBUSTNESS)
+%load TestData2sfn
 rng(1,"twister"); %Fix the global random seed for reproducibility
 
 % Define feature set (same as used in normalization + HI)
@@ -703,31 +728,149 @@ k = 20;
 topFeatures = rankedFeatures(1:k);
 topScores   = scores(idx(1:k));
 
-T = table(topFeatures', topScores', ...
+T2 = table(topFeatures', topScores', ...
     'VariableNames', {'Feature','mRMR_Score'});
 
-disp(T)
-save selectedFeatures2.mat topFeatures
+disp(T2)
+%save selectedFeatures2.mat topFeatures
 
-%% Select Top 20 common predictors for features.
-load TestData2sfn
-%load selectedFeatures1
-%load selectedFeatures2
-% Here, the 20 common predictors of FD001 and FD002 datasetare selected.
 rng(1,"twister"); %Fix the global random seed for reproducibility
-%Prepare the datasets for next 2ndstage pipeline according to the selected predictors
-%Mixed20= HI+12 sensor+3 mid-term +4 short-term (Replace 'BPR_trend10' with 'P30_trend10')
-columns_top_pred= {'Engine_ID','Time','HealthIndex','dW32','NRf_trend5','T24_trend5','NRc_trend5','Nc','Nf','T24','T30','T50','W32','htBleed','P30','Ps30','phi','BPR','W31','NRc_trend10', 'P30_trend10','NRf_trend10','TTF','RUL'};
+columns_top_pred= {'Engine_ID','Time',topFeatures{:,:},'TTF','RUL'};
 
-TrainData2sfnr=TrainData2sfn(:, columns_top_pred);
+TrainData2sfnr2=TrainData2sfn(:, columns_top_pred);
 TestData2sfnr=TestData2sfn(:, columns_top_pred);
 ValidationData2sfnr=ValidationData2sfn(:, columns_top_pred);
-%save TrainData2sfnr
-%Now, preprocessed same 20 predictors of FD002 are ready for second pipeline. 
-%% SECOND PIPELINE
+save TrainData2sfnr2
+
+%TrainData2sfnr2, preprocessed 20 predictors only from FD002, are ready for second pipeline.
+
+%% 11C.FEATURE RANKING and SELECTION OF COMMON TOP 20 PREDICTORS (FD001+FD002)
+%(IF ONLY COMMON-FEATURE STRATEGY FOR CROSS-CONDITION ROBUSTNESS THEN APPLY THIS)
+
 clc;
 clear;
-load TrainData2sfnr
+
+%Ranking 57 features of FD002
+load TestData2sfn
+rng(1,"twister"); %Fix the global random seed for reproducibility
+
+% Define feature set (same as used in normalization + HI)
+featureVars = {'T24','T30','T50','P30','Nf','Nc','Ps30','phi',...
+    'NRf','NRc','BPR','htBleed','W31','W32',...
+    'dT24','dT30','dT50','dP30','dNf','dNc','dPs30','dphi','dNRf','dNRc','dBPR','dhtBleed','dW31','dW32',...
+    'T24_trend5','T30_trend5','T50_trend5','P30_trend5','Nf_trend5','Nc_trend5','Ps30_trend5',...
+    'phi_trend5','NRf_trend5','NRc_trend5','BPR_trend5','htBleed_trend5','W31_trend5','W32_trend5',...
+    'T24_trend10','T30_trend10','T50_trend10','P30_trend10','Nf_trend10','Nc_trend10','Ps30_trend10',...
+    'phi_trend10','NRf_trend10','NRc_trend10','BPR_trend10','htBleed_trend10','W31_trend10','W32_trend10',...
+    'HealthIndex'};
+
+X = TrainData2sfn{:, featureVars};
+
+% Replace with your actual class label variable
+Y = TrainData2sfn.RUL;
+
+% Feature ranking using mRMR on training data
+[idx, scores] = fscmrmr(X, Y);
+rankedFeatures = featureVars(idx);
+
+% Select top-k features
+k = 57;  
+topFeatures = rankedFeatures(1:k);
+topScores   = scores(idx(1:k));
+
+T2c = table(topFeatures', topScores', ...
+    'VariableNames', {'Feature','mRMR_Score'});
+
+disp(T2c)
+
+%Ranking 57 features of FD001
+load TestData1sfn
+rng(1,"twister"); %Fix the global random seed for reproducibility
+X = TrainData1sfn{:, featureVars};
+
+% Replace with your actual class label variable
+Y = TrainData1sfn.RUL;
+
+% Feature ranking using mRMR on training data
+[idx, scores] = fscmrmr(X, Y);
+rankedFeatures = featureVars(idx);
+
+% Select top-k features
+k = 57;  
+topFeatures = rankedFeatures(1:k);
+topScores   = scores(idx(1:k));
+
+T1c = table(topFeatures', topScores', ...
+    'VariableNames', {'Feature','mRMR_Score'});
+
+disp(T1c)
+save T1c
+
+% T1c: FD001 mRMR ranking
+% T2c: FD002 mRMR ranking
+% Both tables contain:
+%   Feature       mRMR_Score
+%   57 rows
+%load T1c
+
+% 1. Make sure Feature is a string variable
+T1c.Feature = string(T1c.Feature);
+T2c.Feature = string(T2c.Feature);
+
+% 2. Align T2c with T1c according to Feature names
+[isMember, idxT2] = ismember(T1c.Feature, T2c.Feature);
+
+% Check that every FD001 feature exists in FD002
+if ~all(isMember)
+    error('Some features in T1c are missing from T2c.');
+end
+
+% Reorder T2c so that the feature order is identical to T1c
+T2_aligned = T2c(idxT2,:);
+
+% 3. Calculate the mean mRMR score
+CommonRanking = table;
+
+CommonRanking.Feature = T1c.Feature;
+CommonRanking.FD001_Score = T1c.mRMR_Score;
+CommonRanking.FD002_Score = T2_aligned.mRMR_Score;
+
+CommonRanking.Mean_mRMR_Score = ...
+    (CommonRanking.FD001_Score + CommonRanking.FD002_Score) / 2;
+
+% 4. Sort according to the mean mRMR score
+CommonRanking = sortrows(CommonRanking, ...
+    'Mean_mRMR_Score', 'descend');
+
+% 5. Select the common top 20 features
+CommonTop20 = CommonRanking(1:20,:);
+
+% 6. Display the results
+disp('Common Top-20 Features:')
+disp(CommonTop20)
+
+%Apply 20 common predictors to the FD001 development/training data
+topFeatures=CommonTop20.Feature;
+save selectedFeatures3.mat topFeatures
+
+rng(1,"twister"); %Fix the global random seed for reproducibility
+columns_top_pred= {'Engine_ID','Time',topFeatures{:,:},'TTF','RUL'};
+
+TrainData2sfnr2=TrainData2sfn(:, columns_top_pred);
+TestData2sfnr=TestData2sfn(:, columns_top_pred);
+ValidationData2sfnr=ValidationData2sfn(:, columns_top_pred);
+save TrainData2sfnr3
+
+%TrainData2sfnr3, common top20 predictors from FD001 and FD002, are ready for second pipeline.
+
+%% 12.SECOND PIPELINE
+%clc;
+%clear;
+
+%load TrainData2sfnr %for fixed-feature robustness analysis
+%load TrainData2sfnr2 %for domain-adapted robustness analysis
+%load TrainData2sfnr3 %for common-feature robustness analysis
+
 rng(1,"twister"); %Fix the global random seed
 % Step1-Extract variables
 predictorNames = TrainData2sfnr.Properties.VariableNames;
@@ -773,66 +916,79 @@ cv_inner = cvpartition(cvInnerIndices, 'KFold', 5);
 % Step3-Define custom F1 evaluation function
 % Already defined
 
-%% Step4-Train Narrow NN with optimized hyperparameters + Group CV
+%% 13. Train Ensemble Bagged Trees with optimized hyperparameters + Group CV
 
 % Define the same COST matrix
-costMatrix = [0 4 5;
-              3  0  1;
-              4  1  0];
+costMatrix = [0 8 9;
+              9  0  1;
+              10  1  0];
 
 
 % Group-Aware CV Evaluation
 
-%Define the same parameters from Narrow NN Bayesian optimization of FD001;
-bestParams_nn.LayerSize=10;
-bestParams_nn.Lambda=1.0044e-05;
+%Define the same parameters from Ensemble Bagged Bayesian optimization of FD001;
+bestParams_ens.NumLearningCycles=106;
+bestParams_ens.MaxNumSplits=15740;
+bestParams_ens.MinLeafSize=1;
 
+% Apply manual cross-validation loop
+% Initialize correctly
 Ypred = Y;
 Ypred(:) = missing;
 
 for i = 1:cv_outer.NumTestSets
-    rng(i,"twister"); %Fix the global random seed
+    rng(2000 + i,"twister");
+    
     trainIdx = training(cv_outer, i);
     testIdx  = test(cv_outer, i);
     
-    model_fold = fitcnet( ...
+     t = templateTree( ...
+    'MaxNumSplits', bestParams_ens.MaxNumSplits, ...
+    'MinLeafSize', bestParams_ens.MinLeafSize);
+
+    model_fold = fitcensemble( ...
         X(trainIdx,:), Y(trainIdx), ...
-        'LayerSizes', bestParams_nn.LayerSize, ...
-        'Lambda', bestParams_nn.Lambda, ...
-        'Standardize', true, ...
+        'Method','Bag', ...
+        'Learners', t, ...
+        'NumLearningCycles', bestParams_ens.NumLearningCycles, ...
         'Cost', costMatrix ...
     );
-    
+     
     Ypred(testIdx) = predict(model_fold, X(testIdx,:));
 end
-
 
 confMat = confusionmat(Y, Ypred)
 
 % Compute custom loss
-loss_nn = alarmF1Loss(Y, Ypred);
-disp(['Cross-validated Alarm F1 Loss (NN): ', num2str(loss_nn)]);
-% Compare models manually based on F1, NOT MATLAB’s error.
+loss_ens = alarmF1Loss(Y, Ypred);
+disp(['Cross-validated Alarm F1 Loss (Ens): ', num2str(loss_ens)]);
+
 
 %Train FINAL model (FULL DATA)
+t = templateTree( ...
+    'MaxNumSplits', bestParams_ens.MaxNumSplits, ...
+    'MinLeafSize', bestParams_ens.MinLeafSize);
 rng(999,"twister");
-finalModel_nn = fitcnet( ...
+
+finalModel_ensb = fitcensemble( ...
     X, Y, ...
-    'LayerSizes', bestParams_nn.LayerSize, ...
-    'Lambda', bestParams_nn.Lambda, ...
-    'Standardize', true, ...
+    'Method','Bag', ...
+    'Learners', t, ...
+    'NumLearningCycles', bestParams_ens.NumLearningCycles, ...
     'Cost', costMatrix ...
 );
-% This is our final deployed model
-disp(finalModel_nn.ClassNames)
-%save finalModel_nn
-finalModel=finalModel_nn;
-%load finalModel_nn
 
-%% STEP 5 — APPLY THRESHOLD ON TEST WITH WARNING CLASS 
-%Define the same calibrated thresholds of Narrow NN FD001
-tAlarm_fixed=0.28515;
-bestTW=0.36635;
+% This is our final deployed model
+disp(finalModel_ensb.ClassNames)
+%save finalModel_ensb
+finalModel=finalModel_ensb;
+%load finalModel_ensb
+
+%% 14.APPLY FIXED THRESHOLDS of FD001 ON FD002 TEST DATA 
+
+%Define the same calibrated thresholds of Ensemble Bagged Trees FD001
+tAlarm_fixed=0.39981;
+bestTW=0.36487;
 
 classOrder = ["alarm","warning","normal"];
 
@@ -885,7 +1041,79 @@ function [recall, precision, F1] = alarmMetrics1(Ytrue, Ypred)
     F1 = 2 * (precision * recall) / (precision + recall + eps);
 
 end
-%% STEP 6 — ENGINE LEVEL DECISION
+
+%We obtained the cycle-level results. Now it is time to make
+%cycle-to-engine level transformation
+
+% PLEASE PASS to STEP 15, FOLLOWING STEP IS ONLY FOR ABLATION ANALYSIS  
+%% ENGINE-LEVEL TRANSFORMATION (Basic worst-case/any-alarm engine aggregation)
+% ABLATION ANALYSIS (WITHOUT TAEI)
+
+engineIDs = unique(TestData2sfnr.Engine_ID);
+
+engine_pred_noStrategy = strings(length(engineIDs),1);
+engine_true = strings(length(engineIDs),1);
+
+for i = 1:length(engineIDs)
+
+    idx = TestData2sfnr.Engine_ID == engineIDs(i);
+
+    % True engine label from final cycle
+    engine_true(i) = string(Ytest(find(idx,1,'last')));
+
+    % Basic worst-case aggregation using the SAME
+    % threshold-calibrated cycle-level predictions
+    if any(Ypred_test(idx) == "alarm")
+
+        engine_pred_noStrategy(i) = "alarm";
+
+    elseif any(Ypred_test(idx) == "warning")
+
+        engine_pred_noStrategy(i) = "warning";
+
+    else
+
+        engine_pred_noStrategy(i) = "normal";
+
+    end
+end
+
+engine_true = categorical(engine_true, classOrder);
+engine_pred_noStrategy = categorical(engine_pred_noStrategy, classOrder);
+
+[recall_e, precision_e, F1_e] = ...
+    alarmMetric2(engine_true, engine_pred_noStrategy)
+
+confusionchart(engine_true, engine_pred_noStrategy)
+%Engine-level Test Confusion Matrix is appeared.
+tabulate(engine_pred_noStrategy)
+
+% Finding Predicted Alarm Engines
+Engines_Compare=table(engineIDs,engine_true,engine_pred_noStrategy);
+Engines_Alarm=Engines_Compare(engine_pred_noStrategy=='alarm',:)
+%Predicted alarm engines' numbers are appeared without prioritization.
+
+% Metric Function
+
+function [recall, precision, F1] = alarmMetric2(Ytrue, Ypred)
+
+    classOrder = ["alarm","warning","normal"];
+    Ytrue = categorical(lower(string(Ytrue)), classOrder);
+    Ypred = categorical(lower(string(Ypred)), classOrder);
+
+    alarmClass = "alarm";
+  
+    tp = sum((Ytrue == alarmClass) & (Ypred == alarmClass));
+    fn = sum((Ytrue == alarmClass) & (Ypred ~= alarmClass));
+    fp = sum((Ytrue ~= alarmClass) & (Ypred == alarmClass));
+
+    recall = tp / (tp + fn + eps);
+    precision = tp / (tp + fp + eps);
+    F1 = 2 * (precision * recall) / (precision + recall + eps);
+
+end
+
+%% 15.ENGINE LEVEL TRANSFORMATION (TAEI DECISION STAGE)
 
 engineIDs = unique(TestData2sfnr.Engine_ID);
 
@@ -906,7 +1134,7 @@ for i = 1:length(engineIDs)
 
     % TIME-AWARE WINDOW 
     N = length(scores_e);
-    last_window = max(1, round(0.2 * N));
+    last_window = max(1, round(0.20 * N));
 
     start_idx = max(1, N - last_window + 1);
     recent_scores = scores_e(start_idx:N);
@@ -995,45 +1223,647 @@ function [recall, precision, F1] = alarmMetric(Ytrue, Ypred)
     F1 = 2 * (precision * recall) / (precision + recall + eps);
 
 end
-%% Step7 Finding Predicted Alarm Engines
+
+% Finding Predicted Alarm Engines
 Engines_Compare=table(engineIDs,engine_true,engine_pred);
 Engines_Alarm=Engines_Compare(engine_pred=='alarm',:)
 
-%% Step8-Evaluate Test Results
-mukayese=table(TestData2sfnr.Engine_ID,TestData2sfnr.Time,Ytest,Ypred_test,TestData2sfnr.TTF);
-mukayese.Properties.VariableNames=[{'Engine_ID'} {'Time'} {'True_Class'} {'Predicted_Class'} {'True_RUL'}];
-mukayese1=mukayese(mukayese.True_Class=='alarm',:);
+%% ENGINE LEVEL DECISION STAGE+ BRANCH ACTIVATION AUDIT
 
-%Predicting RULs of the alarm classes
-%Find the predicted alarms rows.
-muk1_alarm=mukayese(mukayese.Predicted_Class=='alarm',:);
-filtered_Alarms = muk1_alarm(ismember(muk1_alarm.Engine_ID, Engines_Alarm.engineIDs), :);
+engineIDs = unique(TestData2sfnr.Engine_ID);
+nEngines = length(engineIDs);
 
-RULr_alarm=zeros(length(filtered_Alarms.Engine_ID),1);
-for i=1:(length(filtered_Alarms.Engine_ID)-1) 
-    RULr_alarm(1,:)=12;
-    if filtered_Alarms.Engine_ID(i+1,:)==filtered_Alarms.Engine_ID(i,:)
-       RULr_alarm(i+1,:)=RULr_alarm(i,:)-1;
-    else 
-       RULr_alarm(i+1,:)=12;
+% Preallocate outputs
+engine_pred = strings(nEngines,1);
+engine_true = strings(nEngines,1);
+decision_branch = strings(nEngines,1);
+
+% Diagnostic variables
+top_recent_values    = zeros(nEngines,1);
+top_global_values    = zeros(nEngines,1);
+recent_ratio_values  = zeros(nEngines,1);
+top_warning_values   = zeros(nEngines,1);
+
+% Optional diagnostic conditions
+recent_alarm_condition  = false(nEngines,1);
+global_alarm_condition  = false(nEngines,1);
+warning_condition       = false(nEngines,1);
+
+for i = 1:nEngines
+
+    idx = TestData2sfnr.Engine_ID == engineIDs(i);
+    
+    % Scores
+    scores_e = score_alarm_test(idx);
+    scores_w = score_warning_test(idx);
+    
+    % TRUE label (last cycle)
+    true_label = Ytest(find(idx,1,'last'));
+    engine_true(i) = string(true_label);
+
+    % TIME-AWARE WINDOW 
+    N = length(scores_e);
+    window_fraction = 0.20;
+    last_window = max(1, round(window_fraction * N));
+
+    start_idx = max(1, N - last_window + 1);
+    recent_scores = scores_e(start_idx:N);
+
+    % ALARM FEATURE 1:
+    % TOP-K RECENT ALARM EVIDENCE (window)
+    K = 2;
+    recent_sorted = sort(recent_scores, 'descend');
+
+    if length(recent_sorted) >= K
+        top_recent = mean(recent_sorted(1:K));
+    else
+        top_recent = mean(recent_sorted);
+    end
+
+    % ALARM FEATURE 2:
+    % GLOBAL STRONG SIGNAL (fallback)
+    K_global = 2;
+    global_sorted = sort(scores_e, 'descend');
+
+    if length(global_sorted) >= K_global
+        top_global = mean(global_sorted(1:K_global));
+    else
+        top_global = mean(global_sorted);
+    end
+
+    % WARNING Feature
+    Kw = 2;
+    scores_w_sorted = sort(scores_w, 'descend');
+
+    if length(scores_w_sorted) >= Kw
+        topW = mean(scores_w_sorted(1:Kw));
+    else
+        topW = mean(scores_w_sorted);
+    end
+
+
+
+    % CONSISTENCY FEATURE
+    recent_ratio = sum(recent_scores >= tAlarm_fixed) / length(recent_scores);
+
+    % STORE DIAGNOSTIC VALUES
+    top_recent_values(i)   = top_recent;
+    top_global_values(i)   = top_global;
+    recent_ratio_values(i) = recent_ratio;
+    top_warning_values(i)  = topW;
+
+    % DECISION CONDITIONS
+    recent_alarm_condition(i) = (top_recent >= tAlarm_fixed) && (recent_ratio >= 0.05);
+
+    global_alarm_condition(i) = (top_global >= tAlarm_fixed * 1.2) && (recent_ratio >= 0.03);
+
+    warning_condition(i) = (topW >= bestTW);
+
+    % FINAL HIERARCHICAL DECISION
+    if recent_alarm_condition(i)
+
+        engine_pred(i) = "alarm";
+        decision_branch(i) = "recent_alarm";
+
+    elseif global_alarm_condition(i)
+
+        engine_pred(i) = "alarm";
+        decision_branch(i) = "global_fallback";
+
+    elseif warning_condition(i)
+
+        engine_pred(i) = "warning";
+        decision_branch(i) = "warning";
+
+    else
+
+        engine_pred(i) = "normal";
+        decision_branch(i) = "normal";
+
     end
 end
-filtered_Alarms.Predicted_RUL=RULr_alarm;
-filtered_Alarms.Predicted_FailureTime=filtered_Alarms.Time+filtered_Alarms.Predicted_RUL;
-% Evaluate and Prioritize Alarm Predictions
-predr_alarm=filtered_Alarms(:,[1 2 6 7 5]);
-n=1;
-for i=1:(length(filtered_Alarms.Engine_ID)-1)
-    if predr_alarm.Engine_ID(i,:)~=predr_alarm.Engine_ID(i+1,:)
-        predr_alarm1(n,:)=predr_alarm(i,:);
-        n=n+1;
-    elseif predr_alarm.Engine_ID(i,:)==predr_alarm.Engine_ID(i+1,:)
-        while predr_alarm.Engine_ID==predr_alarm.Engine_ID(i,:)
-            idx=(min(predr_alarm.Predicted_RUL));
-            predr_alarm1(n,:)=predr_alarm(idx,:);
-            n=n+1;
-        end
-    end
+
+% Metrics
+engine_true_cat = categorical(engine_true, ...
+    ["alarm","warning","normal"]);
+
+engine_pred_cat = categorical(engine_pred, ...
+    ["alarm","warning","normal"]);
+
+[recall_e, precision_e, F1_e] = ...
+    alarmMetricR1(engine_true_cat, engine_pred_cat)
+
+% CONFUSION MATRIX
+figure;
+confusionchart(engine_true_cat, engine_pred_cat);
+%Engine-level Test Confusion Matrix is appeared.
+
+%BRANCH ACTIVATION SUMMARY
+disp('Predicted classes:')
+tabulate(engine_pred)
+
+disp('Decision branches:')
+tabulate(decision_branch)
+
+% DIAGNOSTIC TABLE
+diagnosticTable = table( ...
+    engineIDs, ...
+    engine_true, ...
+    engine_pred, ...
+    top_recent_values, ...
+    top_global_values, ...
+    recent_ratio_values, ...
+    top_warning_values, ...
+    recent_alarm_condition, ...
+    global_alarm_condition, ...
+    warning_condition, ...
+    decision_branch);
+
+disp(diagnosticTable)
+
+
+% Metric Function
+
+function [recall, precision, F1] = alarmMetricR1(Ytrue, Ypred)
+
+    classOrder = ["alarm","warning","normal"];
+    Ytrue = categorical(lower(string(Ytrue)), classOrder);
+    Ypred = categorical(lower(string(Ypred)), classOrder);
+
+    alarmClass = "alarm";
+  
+    tp = sum((Ytrue == alarmClass) & (Ypred == alarmClass));
+    fn = sum((Ytrue == alarmClass) & (Ypred ~= alarmClass));
+    fp = sum((Ytrue ~= alarmClass) & (Ypred == alarmClass));
+
+    recall = tp / (tp + fn + eps);
+    precision = tp / (tp + fp + eps);
+    F1 = 2 * (precision * recall) / (precision + recall + eps);
+
 end
-predr_alarm1=[predr_alarm1;predr_alarm(end,:)];
-predr_alarm1=sortrows(predr_alarm1,"Predicted_RUL")
+
+% Show the results
+fprintf('Recent alarm condition satisfied: %d\n', ...
+    sum(recent_alarm_condition));
+
+fprintf('Global alarm condition satisfied: %d\n', ...
+    sum(global_alarm_condition));
+
+fprintf('Global only (fallback uniquely needed): %d\n', ...
+    sum(global_alarm_condition & ~recent_alarm_condition));
+
+fprintf('Both recent and global conditions satisfied: %d\n', ...
+    sum(global_alarm_condition & recent_alarm_condition));
+diagnosticTable( ...
+    global_alarm_condition & ~recent_alarm_condition, :)
+diagnosticTable( ...
+    global_alarm_condition & recent_alarm_condition, :)
+%% FIVE-CONFIGURATION ABLATION STUDY
+%
+% Components:
+%
+% R = Recent alarm strength
+%     top_recent >= tAlarm_fixed
+%
+% C = Recent alarm consistency
+%     recent_ratio >= 0.05
+%
+% G = Global strong-evidence fallback
+%     top_global >= 1.2*tAlarm_fixed
+%     AND recent_ratio >= 0.03
+%
+% Configurations:
+%
+% B0 = Neither R nor C nor G
+% B1 = R only
+% B2 = C only
+% B3 = R + C
+% B4 = R + C + G   --> Full proposed mechanism
+%
+% Warning branch is applied when the corresponding alarm
+% condition is not satisfied and topW >= bestTW.
+%
+
+engineIDs = unique(TestData2sfnr.Engine_ID);
+nEngines = length(engineIDs);
+
+% ---------------------------------------------------------------
+% PREALLOCATE
+% ---------------------------------------------------------------
+
+engine_true = strings(nEngines,1);
+
+pred_B0 = strings(nEngines,1);
+pred_B1 = strings(nEngines,1);
+pred_B2 = strings(nEngines,1);
+pred_B3 = strings(nEngines,1);
+pred_B4 = strings(nEngines,1);
+
+% Diagnostic variables
+top_recent_values  = zeros(nEngines,1);
+top_global_values  = zeros(nEngines,1);
+recent_ratio_values = zeros(nEngines,1);
+top_warning_values = zeros(nEngines,1);
+
+recent_condition = false(nEngines,1);
+consistency_condition = false(nEngines,1);
+global_condition = false(nEngines,1);
+warning_condition = false(nEngines,1);
+
+% ---------------------------------------------------------------
+% ENGINE-LEVEL LOOP
+% ---------------------------------------------------------------
+
+for i = 1:nEngines
+
+    idx = TestData2sfnr.Engine_ID == engineIDs(i);
+
+    % Scores
+    scores_e = score_alarm_test(idx);
+    scores_w = score_warning_test(idx);
+
+    % TRUE ENGINE LABEL
+    true_label = Ytest(find(idx,1,'last'));
+    engine_true(i) = string(true_label);
+
+    % -----------------------------------------------------------
+    % TIME-AWARE WINDOW
+    % ------------------------------------------------------------
+
+    N = length(scores_e);
+
+    last_window = max(1, round(0.20 * N));
+
+    start_idx = max(1, N - last_window + 1);
+
+    recent_scores = scores_e(start_idx:N);
+
+    % -----------------------------------------------------------
+    % R — TOP-K RECENT ALARM STRENGTH
+    % ------------------------------------------------------------
+
+    K = 2;
+
+    recent_sorted = sort(recent_scores,'descend');
+
+    if length(recent_sorted) >= K
+        top_recent = mean(recent_sorted(1:K));
+    else
+        top_recent = mean(recent_sorted);
+    end
+
+    % -----------------------------------------------------------
+    % GLOBAL ALARM STRENGTH
+    % ------------------------------------------------------------
+
+    K_global = 2;
+
+    global_sorted = sort(scores_e,'descend');
+
+    if length(global_sorted) >= K_global
+        top_global = mean(global_sorted(1:K_global));
+    else
+        top_global = mean(global_sorted);
+    end
+
+    % -----------------------------------------------------------
+    % WARNING STRENGTH
+    % ------------------------------------------------------------
+
+    Kw = 2;
+
+    scores_w_sorted = sort(scores_w,'descend');
+
+    if length(scores_w_sorted) >= Kw
+        topW = mean(scores_w_sorted(1:Kw));
+    else
+        topW = mean(scores_w_sorted);
+    end
+
+    % -----------------------------------------------------------
+    % C — RECENT ALARM CONSISTENCY
+    % ------------------------------------------------------------
+
+    recent_ratio = ...
+        sum(recent_scores >= tAlarm_fixed) / length(recent_scores);
+
+    % -----------------------------------------------------------
+    % STORE DIAGNOSTIC VALUES
+    % ------------------------------------------------------------
+
+    top_recent_values(i) = top_recent;
+    top_global_values(i) = top_global;
+    recent_ratio_values(i) = recent_ratio;
+    top_warning_values(i) = topW;
+
+    % -----------------------------------------------------------
+    % THREE BASIC CONDITIONS
+    % ------------------------------------------------------------
+
+    R = (top_recent >= tAlarm_fixed);
+
+    C = (recent_ratio >= 0.05);
+
+    % Global fallback condition
+    G = (top_global >= tAlarm_fixed * 1.2) && ...
+        (recent_ratio >= 0.03);
+
+    W = (topW >= bestTW);
+
+    recent_condition(i) = R;
+    consistency_condition(i) = C;
+    global_condition(i) = G;
+    warning_condition(i) = W;
+
+    % ===========================================================
+    % B0 — NEITHER R NOR C NOR G
+    % ===========================================================
+
+    if W
+        pred_B0(i) = "warning";
+    else
+        pred_B0(i) = "normal";
+    end
+
+    % ===========================================================
+    % B1 — RECENT STRENGTH ONLY
+    % ===========================================================
+
+    if R
+        pred_B1(i) = "alarm";
+
+    elseif W
+        pred_B1(i) = "warning";
+
+    else
+        pred_B1(i) = "normal";
+    end
+
+    % ===========================================================
+    % B2 — CONSISTENCY ONLY
+    % ===========================================================
+
+    if C
+        pred_B2(i) = "alarm";
+
+    elseif W
+        pred_B2(i) = "warning";
+
+    else
+        pred_B2(i) = "normal";
+    end
+
+    % ===========================================================
+    % B3 — RECENT STRENGTH + CONSISTENCY
+    % ===========================================================
+
+    if R && C
+        pred_B3(i) = "alarm";
+
+    elseif W
+        pred_B3(i) = "warning";
+
+    else
+        pred_B3(i) = "normal";
+    end
+
+    % ===========================================================
+    % B4 — FULL PROPOSED:
+    %      RECENT + CONSISTENCY + GLOBAL FALLBACK
+    % ===========================================================
+
+    if R && C
+
+        % Primary time-aware alarm
+        pred_B4(i) = "alarm";
+
+    elseif G
+
+        % Global strong-evidence rescue
+        pred_B4(i) = "alarm";
+
+    elseif W
+
+        pred_B4(i) = "warning";
+
+    else
+
+        pred_B4(i) = "normal";
+
+    end
+
+end
+
+% ---------------------------------------------------------------
+% CONVERT TO CATEGORICAL
+% ---------------------------------------------------------------
+
+classOrder = ["alarm","warning","normal"];
+
+Ytrue = categorical(engine_true,classOrder);
+
+Y_B0 = categorical(pred_B0,classOrder);
+Y_B1 = categorical(pred_B1,classOrder);
+Y_B2 = categorical(pred_B2,classOrder);
+Y_B3 = categorical(pred_B3,classOrder);
+Y_B4 = categorical(pred_B4,classOrder);
+
+% ---------------------------------------------------------------
+% CALCULATE METRICS
+% ---------------------------------------------------------------
+
+[Recall_B0, Precision_B0, F1_B0] = ...
+    alarmMetricR(Ytrue,Y_B0);
+
+[Recall_B1, Precision_B1, F1_B1] = ...
+    alarmMetricR(Ytrue,Y_B1);
+
+[Recall_B2, Precision_B2, F1_B2] = ...
+    alarmMetricR(Ytrue,Y_B2);
+
+[Recall_B3, Precision_B3, F1_B3] = ...
+    alarmMetricR(Ytrue,Y_B3);
+
+[Recall_B4, Precision_B4, F1_B4] = ...
+    alarmMetricR(Ytrue,Y_B4);
+
+% ---------------------------------------------------------------
+% ALARM COUNTS
+% ---------------------------------------------------------------
+
+AlarmCount_B0 = sum(Y_B0 == "alarm");
+AlarmCount_B1 = sum(Y_B1 == "alarm");
+AlarmCount_B2 = sum(Y_B2 == "alarm");
+AlarmCount_B3 = sum(Y_B3 == "alarm");
+AlarmCount_B4 = sum(Y_B4 == "alarm");
+
+% ---------------------------------------------------------------
+% RESULTS TABLE
+% ---------------------------------------------------------------
+
+Configuration = [
+    "B0_Neither"
+    "B1_RecentOnly"
+    "B2_ConsistencyOnly"
+    "B3_Both"
+    "B4_Both_GlobalFallback"
+    ];
+
+EngineRecall = [
+    Recall_B0
+    Recall_B1
+    Recall_B2
+    Recall_B3
+    Recall_B4
+    ];
+
+EnginePrecision = [
+    Precision_B0
+    Precision_B1
+    Precision_B2
+    Precision_B3
+    Precision_B4
+    ];
+
+EngineF1 = [
+    F1_B0
+    F1_B1
+    F1_B2
+    F1_B3
+    F1_B4
+    ];
+
+AlarmCount = [
+    AlarmCount_B0
+    AlarmCount_B1
+    AlarmCount_B2
+    AlarmCount_B3
+    AlarmCount_B4
+    ];
+
+ablationResults = table( ...
+    Configuration, ...
+    EngineRecall, ...
+    EnginePrecision, ...
+    EngineF1, ...
+    AlarmCount);
+
+disp(ablationResults);
+
+% ---------------------------------------------------------------
+% ENGINE-LEVEL DIAGNOSTIC TABLE
+% ---------------------------------------------------------------
+
+diagnosticTable_B = table( ...
+    engineIDs, ...
+    engine_true, ...
+    pred_B0, ...
+    pred_B1, ...
+    pred_B2, ...
+    pred_B3, ...
+    pred_B4, ...
+    top_recent_values, ...
+    top_global_values, ...
+    recent_ratio_values, ...
+    top_warning_values, ...
+    recent_condition, ...
+    consistency_condition, ...
+    global_condition, ...
+    warning_condition);
+
+disp(diagnosticTable_B);
+
+% ---------------------------------------------------------------
+% METRIC FUNCTION
+% ---------------------------------------------------------------
+
+function [recall, precision, F1] = alarmMetricR(Ytrue,Ypred)
+
+    classOrder = ["alarm","warning","normal"];
+
+    Ytrue = categorical(lower(string(Ytrue)),classOrder);
+    Ypred = categorical(lower(string(Ypred)),classOrder);
+
+    alarmClass = "alarm";
+
+    tp = sum((Ytrue == alarmClass) & ...
+             (Ypred == alarmClass));
+
+    fn = sum((Ytrue == alarmClass) & ...
+             (Ypred ~= alarmClass));
+
+    fp = sum((Ytrue ~= alarmClass) & ...
+             (Ypred == alarmClass));
+
+    recall = tp / (tp + fn + eps);
+
+    precision = tp / (tp + fp + eps);
+
+    F1 = 2 * (precision * recall) / ...
+         (precision + recall + eps);
+
+end
+
+% B1 vs B2
+
+idx_B1_B2 = pred_B1 ~= pred_B2;
+
+fprintf('B1 vs B2 disagreement count: %d\n', ...
+    sum(idx_B1_B2));
+
+diagnosticTable_B(idx_B1_B2,:)
+
+% B1 vs B3
+
+idx_B1_B3 = pred_B1 ~= pred_B3;
+
+fprintf('B1 vs B3 disagreement count: %d\n', ...
+    sum(idx_B1_B3));
+
+diagnosticTable_B(idx_B1_B3,:)
+
+% B2 vs B3
+
+idx_B2_B3 = pred_B2 ~= pred_B3;
+
+fprintf('B2 vs B3 disagreement count: %d\n', ...
+    sum(idx_B2_B3));
+
+diagnosticTable_B(idx_B2_B3,:)
+
+% B3 vs B4 — EFFECT OF GLOBAL FALLBACK
+
+idx_B3_B4 = pred_B3 ~= pred_B4;
+
+fprintf('B3 vs B4 disagreement count: %d\n', ...
+    sum(idx_B3_B4));
+
+diagnosticTable_B(idx_B3_B4,:)
+
+% Which engines are rescued by global fallback?
+
+rescued = ...
+    (pred_B3 ~= "alarm") & ...
+    (pred_B4 == "alarm");
+
+EnginesRescuedByGlobalFallback=diagnosticTable_B(rescued,:)
+
+
+% Which global-fallback alarms are false?
+
+global_false_alarm = ...
+    (pred_B3 ~= "alarm") & ...
+    (pred_B4 == "alarm") & ...
+    (engine_true ~= "alarm");
+
+
+% Which global-fallback alarms are true alarms?
+
+global_true_alarm = ...
+    (pred_B3 ~= "alarm") & ...
+    (pred_B4 == "alarm") & ...
+    (engine_true == "alarm");
+
+TrueGlobalFallbackAlarms=diagnosticTable_B(global_true_alarm,:)
+
+FalseGlobalFallbackAlarms=diagnosticTable_B(global_false_alarm,:)
