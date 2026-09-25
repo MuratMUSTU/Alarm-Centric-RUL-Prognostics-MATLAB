@@ -734,59 +734,6 @@ TestData1sfnr=TestData1sfn(:, columns_top_pred);
 ValidationData1sfnr=ValidationData1sfn(:, columns_top_pred);
 save TrainData1sfnr
 
-%% Common Top-20 Feature Selection from FD001 and FD002 mRMR Rankings
-%(IF ONLY COMMON FEATURE STRATEGY FOR CROSS-CONDITION ROBUSTNESS THEN APPLY THIS)
-
-% T1: FD001 mRMR ranking
-% T2: FD002 mRMR ranking
-% Both tables contain:
-%   Feature       mRMR_Score
-%   57 rows
-load T2
-% 1. Make sure Feature is a string variable
-T1.Feature = string(T1.Feature);
-T2.Feature = string(T2.Feature);
-
-% 2. Align T2 with T1 according to Feature names
-[isMember, idxT2] = ismember(T1.Feature, T2.Feature);
-
-% Check that every FD001 feature exists in FD002
-if ~all(isMember)
-    error('Some features in T1 are missing from T2.');
-end
-
-% Reorder T2 so that the feature order is identical to T1
-T2_aligned = T2(idxT2,:);
-
-% 3. Calculate the mean mRMR score
-CommonRanking = table;
-
-CommonRanking.Feature = T1.Feature;
-CommonRanking.FD001_Score = T1.mRMR_Score;
-CommonRanking.FD002_Score = T2_aligned.mRMR_Score;
-
-CommonRanking.Mean_mRMR_Score = ...
-    (CommonRanking.FD001_Score + CommonRanking.FD002_Score) / 2;
-
-% 4. Sort according to the mean mRMR score
-CommonRanking = sortrows(CommonRanking, ...
-    'Mean_mRMR_Score', 'descend');
-
-% 5. Select the common top 20 features
-CommonTop20 = CommonRanking(1:20,:);
-
-% 6. Display the results
-disp('Common Top-20 Features:')
-disp(CommonTop20)
-
-%Apply 20 common predictors to the FD001 development/training data
-topFeatures=CommonTop20.Feature;
-rng(1,"twister"); %Fix the global random seed for reproducibility
-columns_top_pred= {'Engine_ID','Time',topFeatures{:,:},'TTF','RUL'};
-TrainData1sfnr=TrainData1sfn(:, columns_top_pred);
-TestData1sfnr=TestData1sfn(:, columns_top_pred);
-ValidationData1sfnr=ValidationData1sfn(:, columns_top_pred);
-
 %% 13.Using classificationLearner for generating function of model
 load TrainData1sfnr
 rng(1,"twister"); %Fix the global random seed
