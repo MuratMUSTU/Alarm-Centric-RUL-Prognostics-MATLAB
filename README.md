@@ -10,7 +10,7 @@ The implementation combines cost-sensitive multi-state classification, engine-gr
 Experiments are conducted on the publicly available NASA Commercial Modular Aero-Propulsion System Simulation (C-MAPSS) FD001 and FD002 datasets. FD001 is used for the principal model-development and evaluation workflow, while FD002 is used to examine cross-condition robustness under alternative predictor-set strategies.
 
 # 1. Repository Structure
-# 1.1 MATLAB Implementation Files
+# 1.1 MATLAB Implementation Files (code)
 # •	MUSTU1_FD001_Class3.m
 Stage I – Model Screening
 
@@ -26,7 +26,7 @@ Implements the initial FD001 model-development workflow, including:
 
 •	Cost-sensitive training
 
-•	Evaluation of 33 classification models using MATLAB Classification Learner
+•	Evaluation of 33 classification models using MATLAB Classification Learner (models)
 
 •	External validation on the held-out validation engines
 
@@ -67,7 +67,7 @@ Implements the FD002 cross-condition robustness experiments. The classifier is r
 # •	alarmF1Loss.m
 Custom loss function implementing the alarm-class F1-based optimization objective used during decision-oriented model optimization.
 
-# 1.2 Feature-Selection Files
+# 1.2 Feature-Selection Files (data)
 The repository includes precomputed mRMR feature-selection results:
 
 •	selectedFeatures1.mat — FD001 training-derived mRMR ranking and selected top-20 predictors
@@ -251,7 +251,7 @@ The repository therefore supports separate assessment of:
 •	Probability-threshold effects
 •	Engine-level decision-layer effects
 •	TAEI pathway activation
-•	TAEI sensitivity to alternative fixed parameterizations
+•	TAEI sensitivity to alternative fixed parameterizations (Supplementary Material under docs)
 
 # 8. Outputs
 The implementation generates or supports analysis of:
